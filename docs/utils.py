@@ -81,6 +81,27 @@ def extract_LPM(ds):
 
     return df
 
+# Add oceanic zones
+def assign_zone(wmo):
+    zone_map = {
+        "Labrador Sea": [6904240, 6904241, 1902578, 4903634],
+        "Arabian Sea": [4903660, 6990514],
+        "Guinea Dome": [3902498, 1902601],
+        "Apero mission": [1902637, 4903740, 4903739],
+        "West Kerguelen": [2903787, 4903657],
+        "East Kerguelen": [1902593, 4903658],
+        "Tropical Indian Ocean": [5906970, 3902473, 6990503, 3902471],
+        "South Pacific Gyre": [2903783],
+        "California Current": [6903093, 6903094],
+        "Nordic Seas": [7901028, 2903794],
+        "North Pacific Gyre": [1902685],
+    }
+
+    for zone, wmos in zone_map.items():
+        if wmo in wmos:
+            return zone
+    return None
+
 # Define WMO floats
 WMO = [1902578, 1902593, 1902601, 1902637, 1902685, 2903783, 2903787, 2903794, 
         3902471, 3902498, 4903634, 4903657, 4903658, 4903660, 4903739, 4903740, 

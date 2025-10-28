@@ -5,7 +5,7 @@ import xarray as xr
 import s3fs
 import pyarrow as pa
 import pyarrow.parquet as pq
-from utils import remove_outliers, extract_LPM, WMO
+from utils import remove_outliers, extract_LPM, assign_zone, WMO
 
 fs = s3fs.S3FileSystem(anon=True)
 
@@ -43,29 +43,7 @@ tmp = (
     .reset_index(drop=True)
 )
 
-
 # Add oceanic zones
-def assign_zone(wmo):
-    zone_map = {
-        "Labrador Sea": [6904240, 6904241, 1902578, 4903634],
-        "Arabian Sea": [4903660, 6990514],
-        "Guinea Dome": [3902498, 1902601],
-        "Apero mission": [1902637, 4903740, 4903739],
-        "West Kerguelen": [2903787, 4903657],
-        "East Kerguelen": [1902593, 4903658],
-        "Tropical Indian Ocean": [5906970, 3902473, 6990503, 3902471],
-        "South Pacific Gyre": [2903783],
-        "California Current": [6903093, 6903094],
-        "Nordic Seas": [7901028, 2903794],
-        "North Pacific Gyre": [1902685],
-    }
-
-    for zone, wmos in zone_map.items():
-        if wmo in wmos:
-            return zone
-    return None
-
-
 tmp["zone"] = tmp["wmo"].astype(int).apply(assign_zone)
 
 # Based on https://observablehq.observablehq.cloud/framework-example-loader-python-to-parquet/
