@@ -5,14 +5,11 @@ on:
     # Runs every Monday at 2:00 AM UTC
     # Cron format: minute hour day-of-month month day-of-week
     - cron: '0 2 * * 1'
-
-  # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -20,14 +17,14 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '22'
           cache: 'npm'
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Clear cache
-        run: npm run clean
+      #- name: Clear cache
+      #  run: npm run clean
 
       - name: Build application
         run: npm run build
@@ -35,6 +32,5 @@ jobs:
       - name: Deploy application
         run: npm run deploy
         env:
-          # Add any required environment variables/secrets here
-          # Example: OBSERVABLE_TOKEN: ${{ secrets.OBSERVABLE_TOKEN }}
+          OBSERVABLE_TOKEN: ${{ secrets.OBSERVABLE_TOKEN }}
           NODE_ENV: production
