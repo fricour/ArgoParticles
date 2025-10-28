@@ -24,7 +24,7 @@ jobs:
         run: npm ci
         
       - name: Install Python dependencies
- 	run: pip install -r requirements.txt
+ 	      run: pip install -r requirements.txt
 
       #- name: Clear cache
       #  run: npm run clean
