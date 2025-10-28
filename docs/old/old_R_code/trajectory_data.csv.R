@@ -3,10 +3,11 @@ library(lubridate)
 library(tidyverse)
 
 # read index file
-index <- fread('/home/fricour/test/argo_bio-profile_index.txt', header = TRUE)
+index <- fread('./data/argo_bio-profile_index.txt')
 
 # floats WMO
 WMO <- c(1902578, 1902593, 1902601, 1902637, 1902685, 2903783, 2903787, 2903794, 3902471, 3902498, 4903634, 4903657, 4903658, 4903660, 4903739, 4903740, 5906970, 6904240, 6904241, 6990503, 6990514, 7901028)
+WMO <- 1902578
 
 tmp <- index %>%
   mutate(

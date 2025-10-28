@@ -1,9 +1,9 @@
 ---
 theme: dashboard
 sql: 
-  particle: LPM_data.parquet
+  particle: particle_concentrations.parquet
+  pss: particle_size_spectra.parquet
   ost: optical_sediment_trap.parquet
-  pss: size_spectra.parquet
 ---
 
 # Particles data from Biogeochemical-Argo floats
@@ -25,7 +25,7 @@ sql:
 //const argo = FileAttachment("LPM_data.parquet").parquet(); // need to rerun when the file changes (won't work with the sql header only)
 
 // Trajectory data
-const traj_argo = FileAttachment("trajectory_data.csv").csv({typed: true});
+const traj_argo = FileAttachment("trajectories.csv").csv({typed: true});
 
 // Size spectra data
 //const size_spectra = FileAttachment("size_spectra.parquet").parquet();
@@ -110,13 +110,13 @@ const colorByRegion = view(
 ```
 
 ```js
-const particle_filtered = await sql([`SELECT * park_depth, WMO, size, concentration, juld, zone
+const particle_filtered = await sql([`SELECT park_depth, WMO, size, concentration, juld, zone
                                       FROM particle
                                       WHERE park_depth IN (${pickDepth.length > 0 ? pickDepth.join(',') : 'NULL'})
                                       AND size IN (${[pickSizeClass]}) 
                                       AND wmo IN (${pickFloat.length > 0 ? pickFloat.join(',') : 'NULL'})`])
 
-const maxConcentration = d3.max(particle_filtered, d => d.concentration);
+// const maxConcentration = d3.max(particle_filtered, d => d.concentration);
 
 const ost_filtered = await sql([`SELECT * 
                                  FROM ost 
@@ -139,7 +139,7 @@ const colorScale = d3.scaleOrdinal()
 
 ```js
 // leaflet map to plot floats' trajectories
-// made with Claude Ai
+// Thanks claude.ai
 const div = display(document.createElement("div"));
 div.style = "height: 500px;";
 
@@ -229,17 +229,17 @@ const particle_plot = Plot.plot({
     Plot.tip(particle_filtered, Plot.pointer({
       y: "concentration",
       x: "juld",
-      title: d => `WMO: ${d.wmo}\nZone: ${d.zone}\nParking depth: ${d.park_depth} m`
+      title: d => `WMO: ${d.wmo}\nZone: ${d.zone}\nParking depth: ${d.park_depth.toFixed(0)} m`
     })),
     Plot.crosshair(particle_filtered, {x: "juld", y: "concentration"}),
     Plot.lineY(particle_filtered, Plot.windowY({
-        k: 60, 
+        k: 60,
         reduce: "median",
-        x: "juld", 
-        y: "concentration", 
-        stroke: d => colorByRegion ? colorScale(d.zone) : colorScale(d.wmo), 
-        strokeWidth: 3, 
-        z: d => `${d.wmo}-${d.park_depth}`})) // multiple groups (wmo and park depth)
+        x: "juld",
+        y: "concentration",
+        stroke: d => colorByRegion ? colorScale(d.zone) : colorScale(d.wmo),
+        strokeWidth: 3,
+        z: d => `${d.wmo}-${d.park_depth}`}), {sort: "juld"})
   ],
   y: {
     label: "Concentration (#/L)",
@@ -264,7 +264,7 @@ const pss_plot = Plot.plot({
   marks: [
     Plot.dot(pss_filtered, {
       y: "mean_slope",
-      x: "date",
+      x: "juld_date",
       fill: d => colorByRegion ? colorScale(d.zone) : colorScale(d.wmo),  // Use the custom color scale
       r: 3,
       opacity: 0.5,
@@ -272,25 +272,30 @@ const pss_plot = Plot.plot({
     }),
     Plot.tip(pss_filtered, Plot.pointer({
       y: "mean_slope",
-      x: "date",
+      x: "juld_date",
       title: d => `WMO: ${d.wmo}\nZone: ${d.zone}\nParking depth: ${d.park_depth} m`
     })),
     Plot.lineY(pss_filtered, Plot.windowY({
-      k:12, 
-      reduce: "median", 
-      x: "date", 
-      y: "mean_slope", 
+      k:12,
+      reduce: "median",
+      x: "juld_date",
+      y: "mean_slope",
       stroke: d => colorByRegion ? colorScale(d.zone) : colorScale(d.wmo),
-      strokeWidth: 3, 
+      strokeWidth: 3,
       z: d => `${d.wmo}-${d.park_depth}`})),
-    Plot.crosshair(pss_filtered, {x: "date", y: "mean_slope"})
+    Plot.crosshair(pss_filtered, {x: "juld_date", y: "mean_slope"})
   ],
   y: {
     label: "Mean slope",
     reverse: false
   },
   x: {
-    label: "Date"
+    label: "Date",
+    type: "utc",
+    tickFormat: d => {
+      const date = new Date(d);
+      return date.getUTCMonth() === 0 ? d3.utcFormat("Jan\n%Y")(date) : d3.utcFormat("%b")(date);
+    }
   },
   width: 800,  // Increased width for better visibility
   height: 500,  // Increased height for better visibility
