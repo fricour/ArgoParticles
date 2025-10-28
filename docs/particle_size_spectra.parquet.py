@@ -206,6 +206,7 @@ def assign_zone(wmo):
 
 
 tmp["zone"] = tmp["wmo"].astype(int).apply(assign_zone)
+tmp["wmo"] = tmp["wmo"].astype(str)
 
 # Based on https://observablehq.observablehq.cloud/framework-example-loader-python-to-parquet/
 # Write DataFrame to a temporary file-like object

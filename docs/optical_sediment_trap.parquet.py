@@ -315,6 +315,7 @@ def derive_ost_flux(data, wmo_float):
             "min_time": [min_time],
             "small_flux": [poc_flux],
             "large_flux": [large_part_poc_flux],
+            "total_flux": [poc_flux + large_part_poc_flux],
             "park_depth": [data["park_depth"].iloc[0]],
             "wmo": [data["wmo"].iloc[0]],
             "cycle": [data["cycle"].iloc[0]],
@@ -395,7 +396,6 @@ for wmo in WMO:
 
 tmp = pd.concat(results, ignore_index=True)
 
-
 # Add oceanic zones
 def assign_zone(wmo):
     zone_map = {
@@ -418,6 +418,7 @@ def assign_zone(wmo):
 
 
 tmp["zone"] = tmp["wmo"].astype(int).apply(assign_zone)
+tmp["wmo"] = tmp["wmo"].astype(str)
 
 # Based on https://observablehq.observablehq.cloud/framework-example-loader-python-to-parquet/
 # Write DataFrame to a temporary file-like object
