@@ -1,38 +1,13 @@
 import s3fs
 import pandas as pd
 import sys
+from utils import WMO
 
 fs = s3fs.S3FileSystem(anon=True)
 
 # Read the text file
 with fs.open("s3://argo-gdac-sandbox/pub/idx/argo_bio-profile_index.txt", "rb") as f:
     df = pd.read_csv(f, comment="#", sep=",")
-
-# Define WMO list
-WMO = [
-    1902578,
-    1902593,
-    1902601,
-    1902637,
-    1902685,
-    2903783,
-    2903787,
-    2903794,
-    3902471,
-    3902498,
-    4903634,
-    4903657,
-    4903658,
-    4903660,
-    4903739,
-    4903740,
-    5906970,
-    6904240,
-    6904241,
-    6990503,
-    6990514,
-    7901028,
-]
 
 # Process the dataframe
 tmp = (
@@ -49,7 +24,7 @@ tmp = (
     .query("wmo in @WMO")
     .dropna()
     .astype({"wmo": int, "cycle": int})
-    .reset_index()
+    .reset_index(drop=True)
 )
 
 # Output to stdout for Observable Framework

@@ -62,8 +62,9 @@ remove_outliers <- function(x) {
 
 # extract particle data for each float
 WMO <- c(1902578, 1902593, 1902601, 1902637, 1902685, 2903783, 2903787, 2903794, 3902471, 3902498, 4903634, 4903657, 4903658, 4903660, 4903739, 4903740, 5906970, 6904240, 6904241, 6990503, 6990514, 7901028)
+WMO <- 1902578
 # NOTE: 6904094 does not have Traj file and 6904093 does have the same var names than the others....
-tmp <- map_dfr(WMO, ~extract_LPM(paste0("./docs/data/argo_trajectory_files/", .x, "/", .x, "_Rtraj_aux.nc"))) |>
+tmp <- map_dfr(WMO, ~extract_LPM(paste0("./data/", .x, "/", .x, "_Rtraj_aux.nc"))) |>
   bind_rows()
 
 # some additional cleaning 

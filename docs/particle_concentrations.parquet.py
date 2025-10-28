@@ -5,82 +5,9 @@ import xarray as xr
 import s3fs
 import pyarrow as pa
 import pyarrow.parquet as pq
-from utils import remove_outliers, WMO
+from utils import remove_outliers, extract_LPM, WMO
 
 fs = s3fs.S3FileSystem(anon=True)
-
-
-def extract_LPM(ds):
-    """Extract particle data at parking depth from NetCDF file"""
-
-    # Extract variables
-    pres = ds["PRES"].values
-    mc = ds["MEASUREMENT_CODE"].values
-    juld = ds["JULD"].values
-    cycle = ds["CYCLE_NUMBER"].values
-    wmo = ds["PLATFORM_NUMBER"].values.astype(str).item().strip()
-    part_spectra = ds["NB_SIZE_SPECTRA_PARTICLES"].values
-    image_number = ds["NB_IMAGE_PARTICLES"].values
-
-    # Particle class sizes
-    lpm_classes = [
-        "NP_Size_50.8",
-        "NP_Size_64",
-        "NP_Size_80.6",
-        "NP_Size_102",
-        "NP_Size_128",
-        "NP_Size_161",
-        "NP_Size_203",
-        "NP_Size_256",
-        "NP_Size_323",
-        "NP_Size_406",
-        "NP_Size_512",
-        "NP_Size_645",
-        "NP_Size_813",
-        "NP_Size_1020",
-        "NP_Size_1290",
-        "NP_Size_1630",
-        "NP_Size_2050",
-        "NP_Size_2580",
-    ]
-
-    # Create DataFrame from transposed particle spectra
-    df = pd.DataFrame(part_spectra, columns=lpm_classes)
-
-    # Divide by image volume (0.7L * number of images)
-    for col in lpm_classes:
-        df[col] = df[col] / (0.7 * image_number)
-
-    # Add metadata
-    df["depth"] = pres
-    df["mc"] = mc
-    df["cycle"] = cycle
-    df["juld"] = juld
-    df["wmo"] = wmo
-
-    # Filter and clean
-    df = (
-        df.dropna(subset=["NP_Size_50.8"])
-        .query("mc == 290")  # only keep data when the float is parked
-        .drop(columns=["mc"])  # remove measurement code (not needed anymore)
-        .assign(
-            park_depth=lambda x: np.where(
-                x["depth"] < 350, 200, np.where(x["depth"] > 750, 1000, 500)
-            )
-        )
-        .query('juld > "2021-01-01" and juld < "2026-01-01"')
-        .astype({"cycle": int})
-        .reset_index()
-    )
-
-    # Reorder columns
-    cols = ["depth", "park_depth", "cycle", "juld", "wmo"] + lpm_classes
-    df = df[cols]
-
-    ds.close()
-
-    return df
-
 
 # Extract particle data for each float
 dfs = []

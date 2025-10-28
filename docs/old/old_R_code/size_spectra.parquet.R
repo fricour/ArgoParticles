@@ -48,7 +48,8 @@ extract_LPM <- function(ncfile){
 compute_spectral_slope <- function(wmo_float, path_to_data){
 
   # extract UVP data at parking
-  ncfile <- paste0(path_to_data,wmo_float,'/',wmo_float,'_Rtraj_aux.nc')
+  #ncfile <- paste0(path_to_data,wmo_float,'/',wmo_float,'_Rtraj_aux.nc')
+  ncfile <- paste0(path_to_data,'/',wmo_float,'_Rtraj_aux.nc')
   data <- extract_LPM(ncfile)
 
   # particle size classes
@@ -113,6 +114,8 @@ compute_slope <- function(i, data_spectra, mid_DSE, size_bin){
 # extract particle size spectra 
 WMO <- c(1902578, 1902593, 1902601, 1902637, 1902685, 2903783, 2903787, 2903794, 3902471, 3902498, 4903634, 4903657, 4903658, 4903660, 4903739, 4903740, 5906970, 6904240, 6904241, 6990503, 6990514, 7901028)
 tmp <- purrr::map_dfr(WMO, compute_spectral_slope, path_to_data = './docs/data/argo_trajectory_files/')
+WMO <- 1902578
+tmp <- purrr::map_dfr(WMO, compute_spectral_slope, path_to_data = './data/1902578/') 
 
 # clean for format_csv
 tmp <- tmp |>

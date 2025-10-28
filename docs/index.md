@@ -1,7 +1,8 @@
 ---
 theme: dashboard
 sql: 
-  particle: s3-LPM.parquet
+  particle: particle_concentrations.parquet
+  pss: particle_size_spectra.parquet
 ---
 
 # Particles data from Biogeochemical-Argo floats
@@ -121,10 +122,10 @@ const maxConcentration = d3.max(particle_filtered, d => d.concentration);
 //                                  WHERE park_depth IN (${pickDepth.length > 0 ? pickDepth.join(',') : 'NULL'})
 //                                  AND wmo IN (${pickFloat.length > 0 ? pickFloat.join(',') : 'NULL'})`])    
                                  
-// const pss_filtered = await sql([`SELECT *
-//                                  FROM pss
-//                                  WHERE park_depth IN (${pickDepth.length > 0 ? pickDepth.join(',') : 'NULL'})
-//                                  AND wmo IN (${pickFloat.length > 0 ? pickFloat.join(',') : 'NULL'})`])
+const pss_filtered = await sql([`SELECT *
+                                 FROM pss
+                                 WHERE park_depth IN (${pickDepth.length > 0 ? pickDepth.join(',') : 'NULL'})
+                                 AND wmo IN (${pickFloat.length > 0 ? pickFloat.join(',') : 'NULL'})`])
 ```
 
 
