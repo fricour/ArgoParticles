@@ -141,7 +141,7 @@ const colorScale = d3.scaleOrdinal()
 // leaflet map to plot floats' trajectories
 // Thanks claude.ai
 const div = display(document.createElement("div"));
-div.style = "height: 500px;";
+div.style = "height: 500px; width: 100%;";
 
 const map = L.map(div)
   .setView([0, 180], 2); // centered on Greenwich, zoom level 2
@@ -217,7 +217,7 @@ const group = L.featureGroup(allPolylines);
 
 ```js
 // Create the particle plot (when floats have reached their parking depth)
-const particle_plot = Plot.plot({
+const particle_plot = resize((width) => Plot.plot({
   marks: [
     Plot.dot(particle_filtered, {
       y: "concentration",
@@ -248,19 +248,19 @@ const particle_plot = Plot.plot({
   x: {
     label: "Date"
   },
-  width: 800,  // Increased width for better visibility
-  height: 500,  // Increased height for better visibility
+  width,
+  height: 500,
   style: {
     fontFamily: "sans-serif",
     fontSize: 12
   },
   marginRight: 100  // Add right margin for the legend
-})
+}))
 ```
 
 ```js
 // Particle size spectra plot
-const pss_plot = Plot.plot({
+const pss_plot = resize((width) => Plot.plot({
   marks: [
     Plot.dot(pss_filtered, {
       y: "mean_slope",
@@ -297,19 +297,19 @@ const pss_plot = Plot.plot({
       return date.getUTCMonth() === 0 ? d3.utcFormat("Jan\n%Y")(date) : d3.utcFormat("%b")(date);
     }
   },
-  width: 800,  // Increased width for better visibility
-  height: 500,  // Increased height for better visibility
+  width,
+  height: 500,
   style: {
     fontFamily: "sans-serif",
     fontSize: 12
   },
   marginRight: 100  // Add right margin for the legend
-})
+}))
 ```
 
 ```js
 // Optical sediment trap plot
-const ost_plot = Plot.plot({
+const ost_plot = resize((width) => Plot.plot({
   marks: [
     Plot.dot(ost_filtered, {
       y: "total_flux",
@@ -325,10 +325,10 @@ const ost_plot = Plot.plot({
       title: d => `WMO: ${d.wmo}\nZone: ${d.zone}\nParking depth: ${d.park_depth} m\nSmall flux: ${d.small_flux.toFixed(2)}\nLarge flux: ${d.large_flux.toFixed(2)}`
     })),
     Plot.lineY(ost_filtered, Plot.windowY({
-      k:12, 
-      reduce: "median", 
-      x: "max_time", 
-      y: "total_flux", 
+      k:12,
+      reduce: "median",
+      x: "max_time",
+      y: "total_flux",
       stroke: d => colorByRegion ? colorScale(d.zone) : colorScale(d.wmo),
       strokeWidth: 3,
       z: d => `${d.wmo}-${d.park_depth}`})),
@@ -341,14 +341,14 @@ const ost_plot = Plot.plot({
   x: {
     label: "Date"
   },
-  width: 800,  // Increased width for better visibility
-  height: 500,  // Increased height for better visibility
+  width,
+  height: 500,
   style: {
     fontFamily: "sans-serif",
     fontSize: 12
   },
   marginRight: 100  // Add right margin for the legend
-})
+}))
 ```
 
 ```js
