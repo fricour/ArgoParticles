@@ -1,4 +1,5 @@
 h5netcdf
+h5py
 numpy
 pandas
 pyarrow
