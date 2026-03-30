@@ -8,7 +8,7 @@ sql:
 
 # Particles data from Biogeochemical-Argo floats
 
-## Data from [Argo GDAC](http://www.argodatamgt.org/Access-to-data/Argo-GDAC-ftp-https-and-s3-servers)
+## Data from [Argo GDAC](https://www.argodatamgt.org/DataAccess.html)
 
 ```js
 const traj_argo = FileAttachment("trajectories.csv").csv({typed: true});
@@ -27,7 +27,7 @@ const park_depths = [200, 500, 1000];
 ```js
 const colorScale = d3.scaleOrdinal()
   .domain(wmo.map(String))
-  .range(d3.quantize(d3.interpolateTurbo, Math.max(wmo.length, 2)));
+  .range(d3.schemeCategory10.concat(d3.schemeSet1, d3.schemeDark2));
 
 const zoneColorScale = d3.scaleOrdinal()
   .domain(zones)
@@ -47,7 +47,8 @@ const pickDepth = view(Inputs.checkbox(park_depths, {
 
 const pickFloat = view(Inputs.select(wmo, {
   label: "Float WMO",
-  value: wmo[0]
+  multiple: true,
+  value: [wmo[0]]
 }));
 
 const colorByRegion = view(Inputs.toggle({
@@ -57,34 +58,34 @@ const colorByRegion = view(Inputs.toggle({
 ```
 
 ```js
-// Selected WMO comes from the dropdown
-const selectedWmo = pickFloat;
+const selectedWmos = Array.from(pickFloat);
 ```
 
 ```js
 // SQL queries
 const pickDepthStr = pickDepth.length > 0 ? pickDepth.join(',') : 'NULL';
+const pickFloatStr = selectedWmos.length > 0 ? selectedWmos.map(d => `'${d}'`).join(',') : 'NULL';
 
 const particle_filtered = await sql([`
   SELECT park_depth, wmo, size, concentration, juld, zone
   FROM particle
   WHERE park_depth IN (${pickDepthStr})
     AND size = ${pickSizeClass}
-    AND wmo = '${selectedWmo}'
+    AND wmo IN (${pickFloatStr})
 `]);
 
 const ost_filtered = await sql([`
   SELECT *
   FROM ost
   WHERE park_depth IN (${pickDepthStr})
-    AND wmo = '${selectedWmo}'
+    AND wmo IN (${pickFloatStr})
 `]);
 
 const pss_filtered = await sql([`
   SELECT *
   FROM pss
   WHERE park_depth IN (${pickDepthStr})
-    AND wmo = '${selectedWmo}'
+    AND wmo IN (${pickFloatStr})
 `]);
 ```
 
@@ -94,12 +95,13 @@ const dateExtent = d3.extent(particle_filtered, d => d.juld);
 ```
 
 ```js
-// Leaflet map: all floats shown, click to select one
+// Leaflet map: all floats shown, click to toggle selection
 const mapDiv = (() => {
   const div = document.createElement("div");
   div.style.height = "400px";
   div.style.width = "100%";
 
+  const selected = new Set(selectedWmos);
   const groupedData = d3.group(traj_argo, d => d.wmo);
   const map = L.map(div).setView([0, 0], 2);
 
@@ -113,7 +115,7 @@ const mapDiv = (() => {
   groupedData.forEach((floatData, wmoKey) => {
     floatData.sort((a, b) => a.cycle - b.cycle);
     const latlngs = floatData.map(d => [d.latitude, d.longitude]);
-    const isSelected = wmoKey === selectedWmo;
+    const isSelected = selected.has(wmoKey);
     const baseColor = isSelected ? colorScale(String(wmoKey)) : "#555";
     const baseWeight = isSelected ? 4 : 2;
     const baseOpacity = isSelected ? 0.9 : 0.3;
@@ -124,13 +126,7 @@ const mapDiv = (() => {
       opacity: baseOpacity
     }).addTo(map);
 
-    polyline.bindTooltip(`WMO: ${wmoKey}`, {permanent: false, direction: 'top', opacity: 0.8});
-
-    polyline.on('click', function () {
-      // Update the select dropdown programmatically
-      const sel = document.querySelector('select[name="Float WMO"]') || document.querySelector('select');
-      if (sel) { sel.value = wmoKey; sel.dispatchEvent(new Event('input', {bubbles: true})); }
-    });
+    polyline.bindTooltip(`WMO: ${wmoKey}${isSelected ? " ✓" : ""}`, {permanent: false, direction: 'top', opacity: 0.8});
 
     polyline.on('mouseover', function () {
       this.setStyle({color: '#ffff00', weight: 5});
@@ -151,16 +147,12 @@ const mapDiv = (() => {
         radius: isSelected ? 5 : 3
       }).addTo(map);
       marker.bindPopup(`Float: ${wmoKey}<br>Last update: ${floatData[floatData.length - 1].date}`);
-      marker.on('click', function () {
-        const sel = document.querySelector('select[name="Float WMO"]') || document.querySelector('select');
-        if (sel) { sel.value = wmoKey; sel.dispatchEvent(new Event('input', {bubbles: true})); }
-      });
     }
   });
 
   if (allPolylines.length > 0) {
     const group = L.featureGroup(allPolylines);
-    map.fitBounds(group.getBounds().pad(0.1));
+    map.fitBounds(group.getBounds(), {padding: [20, 20], maxZoom: 4});
   }
 
   requestAnimationFrame(() => map.invalidateSize());
@@ -189,6 +181,9 @@ const particle_plot = resize((width) => Plot.plot({
   ],
   y: {label: "Concentration (#/L)"},
   x: {label: "Date"},
+  color: colorByRegion
+    ? {legend: true, domain: zones, range: zoneColorScale.range()}
+    : {legend: true, domain: selectedWmos.map(String), range: selectedWmos.map(w => colorScale(String(w)))},
   width, height: 400,
   style: {fontFamily: "sans-serif", fontSize: 12}
 }));
@@ -220,6 +215,9 @@ const pss_plot = resize((width) => Plot.plot({
       return date.getUTCMonth() === 0 ? d3.utcFormat("Jan\n%Y")(date) : d3.utcFormat("%b")(date);
     }
   },
+  color: colorByRegion
+    ? {legend: true, domain: zones, range: zoneColorScale.range()}
+    : {legend: true, domain: selectedWmos.map(String), range: selectedWmos.map(w => colorScale(String(w)))},
   width, height: 400,
   style: {fontFamily: "sans-serif", fontSize: 12}
 }));
@@ -246,6 +244,9 @@ const ost_plot = resize((width) => Plot.plot({
   ],
   y: {label: "Total particle flux (mg C m-2 d-1)"},
   x: {label: "Date"},
+  color: colorByRegion
+    ? {legend: true, domain: zones, range: zoneColorScale.range()}
+    : {legend: true, domain: selectedWmos.map(String), range: selectedWmos.map(w => colorScale(String(w)))},
   width, height: 400,
   style: {fontFamily: "sans-serif", fontSize: 12}
 }));
@@ -258,7 +259,7 @@ const ost_plot = resize((width) => Plot.plot({
   </div>
   <div class="card">
     <h2>Date range</h2>
-    <span class="big">${dateExtent[0] ? d3.utcFormat("%b %Y")(dateExtent[0]) : "---"} --- ${dateExtent[1] ? d3.utcFormat("%b %Y")(dateExtent[1]) : "---"}</span>
+    <span class="big">${dateExtent[0] ? d3.utcFormat("%b %Y")(dateExtent[0]) : "---"} - ${dateExtent[1] ? d3.utcFormat("%b %Y")(dateExtent[1]) : "---"}</span>
   </div>
 </div>
 
@@ -266,7 +267,7 @@ const ost_plot = resize((width) => Plot.plot({
   <div class="card" style="padding: 0;">
     <div style="padding: 1rem;">
       <h2>Float trajectories</h2>
-      <h3>Click a trajectory to select it. Selected: ${selectedWmo}</h3>
+      <h3>Red markers show the last known position</h3>
       ${mapDiv}
     </div>
   </div>

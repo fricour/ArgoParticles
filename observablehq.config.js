@@ -19,7 +19,7 @@ export default {
   // Some additional configuration options and their defaults:
   //theme: "light", // try "light", "dark", "slate", etc.
   // header: "", // what to show in the header (HTML)
-  footer: "Built with <a href='https://observablehq.com/'>Observable</a>. Author: <a href='https://fricour.github.io/'>Florian Ricour</a>", // what to show in the footer (HTML)
+  footer: "Built with <a href='https://observablehq.com/'>Observable</a>. Author: <a href='https://fricour.com/'>Florian Ricour</a>", // what to show in the footer (HTML)
   // toc: true, // whether to show the table of contents
   // pager: true, // whether to show previous & next links in the footer
   root: "docs" // path to the source root for preview
