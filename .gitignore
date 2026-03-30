@@ -4,4 +4,7 @@ docs/.observablehq/cache/
 node_modules/
 yarn-error.log
 *.ipynb_checkpoints/
-*/__pycache__/
+__pycache__/
+*.pyc
+*.ipynb
+docs/.cache/

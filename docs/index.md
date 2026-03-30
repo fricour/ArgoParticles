@@ -1,6 +1,6 @@
 ---
 theme: dashboard
-sql: 
+sql:
   particle: particle_concentrations.parquet
   pss: particle_size_spectra.parquet
   ost: optical_sediment_trap.parquet
@@ -9,384 +9,290 @@ sql:
 # Particles data from Biogeochemical-Argo floats
 
 ## Data from [Argo GDAC](http://www.argodatamgt.org/Access-to-data/Argo-GDAC-ftp-https-and-s3-servers)
-```js
-// Load the required libraries for leaflet map, see here https://observablehq.com/framework/imports
-//import { scaleLinear } from 'npm:d3-scale';
-//import { interpolateViridis } from 'npm:d3-scale-chromatic';
-```
 
 ```js
-//
-// Load data snapshots (big datasets are loaded with SQL (and duckDB behind the scenes, see the specifications at the top of the file))
-//
-
-// changed my mind with this resource https://observablehq.com/framework/sql for the big dataset (not the trajectory one for the leaflet map)
-// Particle data
-//const argo = FileAttachment("LPM_data.parquet").parquet(); // need to rerun when the file changes (won't work with the sql header only)
-
-// Trajectory data
 const traj_argo = FileAttachment("trajectories.csv").csv({typed: true});
-
-// Size spectra data
-//const size_spectra = FileAttachment("size_spectra.parquet").parquet();
-
-// OST data
-//const ost_data = FileAttachment("optical_sediment_trap.parquet").parquet();
-
-// Taxo data
-//const taxo_data = FileAttachment("taxo_data.parquet").parquet();
 ```
 
 ```js
-// declaration of key variables
+const wmo = [...new Set(traj_argo.map(d => d.wmo))].sort((a, b) => a - b);
 
-// particle size classes
-const lpm_classes = [50.8, 64, 80.6, 102, 128, 161, 203, 256, 323, 406, 512, 645, 813, 1020, 1290, 1630, 2050, 2580]
+const zones_result = await sql([`SELECT DISTINCT zone FROM particle WHERE zone IS NOT NULL ORDER BY zone`]);
+const zones = [...zones_result].map(d => d.zone);
 
-// wmos (unique id for BGC-Argo floats)
-const wmo = [1902578, 1902593, 1902601, 1902637, 1902685, 2903783, 2903787, 2903794, 3902471, 3902498, 4903634, 4903657, 4903658, 4903660, 4903739, 4903740, 5906970, 6904240, 6904241, 6990503, 6990514, 7901028]
-
-// parking depths
-const park_depths = [200, 500, 1000]
-
-// Define a custom color palette (colorblind-friendly)
-const colorPalette = [
-  "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd",
-  "#8c564b", "#e377c2", "#7f7f7f", "#bcbd22", "#17becf"
-];
-
-// oceanic zones
-const zones = ["Labrador Sea", "East Kerguelen", "Guinea Dome", "Apero mission", "North Pacific Gyre", "South Pacific Gyre", "West Kerguelen",
-"Nordic Seas", "Tropical Indian Ocean", "Arabian Sea"]
+const lpm_classes = [50.8, 64, 80.6, 102, 128, 161, 203, 256, 323, 406, 512, 645, 813, 1020, 1290, 1630, 2050, 2580];
+const park_depths = [200, 500, 1000];
 ```
 
 ```js
-//
-// input declarations
-//
-// define user inputs
-const pickSizeClass = view(
-  Inputs.select(
-    lpm_classes,
-    {
-      multiple: false,
-      label: "Size class (µm)",
-      unique: true,
-      sort: false,
-      value: 102
-    }
-  )
-);
-
-const pickDepth = view(
-  Inputs.checkbox(
-    park_depths,
-    {
-      multiple: true,
-      label: "Parking depth (m)",
-      unique: true,
-      sort: false,
-      value: [1000]
-    }
-  )
-);
-
-const pickFloat = view(
-  Inputs.select(
-   wmo,
-    {
-      multiple: 5,
-      label: "Float WMO",
-      unique: true,
-      sort: false,
-      value: [1902578]
-    }
-  )
-);
-
-const colorByRegion = view(
-  Inputs.toggle({label: "Colour by region", value: false}
-  ));
-```
-
-```js
-const particle_filtered = await sql([`SELECT park_depth, WMO, size, concentration, juld, zone
-                                      FROM particle
-                                      WHERE park_depth IN (${pickDepth.length > 0 ? pickDepth.join(',') : 'NULL'})
-                                      AND size IN (${[pickSizeClass]}) 
-                                      AND wmo IN (${pickFloat.length > 0 ? pickFloat.join(',') : 'NULL'})`])
-
-// const maxConcentration = d3.max(particle_filtered, d => d.concentration);
-
-const ost_filtered = await sql([`SELECT * 
-                                 FROM ost 
-                                 WHERE park_depth IN (${pickDepth.length > 0 ? pickDepth.join(',') : 'NULL'})
-                                 AND wmo IN (${pickFloat.length > 0 ? pickFloat.join(',') : 'NULL'})`])    
-                                 
-const pss_filtered = await sql([`SELECT *
-                                 FROM pss
-                                 WHERE park_depth IN (${pickDepth.length > 0 ? pickDepth.join(',') : 'NULL'})
-                                 AND wmo IN (${pickFloat.length > 0 ? pickFloat.join(',') : 'NULL'})`])
-```
-
-
-```js
-// Create a color scale based on unique WMO values
 const colorScale = d3.scaleOrdinal()
-  .domain(wmo)
-  .range(colorPalette);
+  .domain(wmo.map(String))
+  .range(d3.quantize(d3.interpolateTurbo, Math.max(wmo.length, 2)));
+
+const zoneColorScale = d3.scaleOrdinal()
+  .domain(zones)
+  .range(d3.schemeTableau10.concat(["#aec7e8"]));
 ```
 
 ```js
-// leaflet map to plot floats' trajectories
-// Thanks claude.ai
-const div = display(document.createElement("div"));
-div.style = "height: 500px; width: 100%;";
+const pickSizeClass = view(Inputs.select(lpm_classes, {
+  label: "Size class (um)",
+  value: 102
+}));
 
-const map = L.map(div)
-  .setView([0, 180], 2); // centered on Greenwich, zoom level 2
+const pickDepth = view(Inputs.checkbox(park_depths, {
+  label: "Parking depth (m)",
+  value: [1000]
+}));
 
-L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png', {
-  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
-  maxZoom: 20
-}).addTo(map);
+const pickFloat = view(Inputs.select(wmo, {
+  label: "Float WMO",
+  value: wmo[0]
+}));
 
-const groupedData = d3.group(traj_argo, d => d.wmo);
+const colorByRegion = view(Inputs.toggle({
+  label: "Colour by region",
+  value: false
+}));
+```
 
-// Prepare an array to hold all polylines
-let allPolylines = [];
+```js
+// Selected WMO comes from the dropdown
+const selectedWmo = pickFloat;
+```
 
-// For each float (WMO)
-groupedData.forEach((floatData, wmo) => {
-  // Sort the data by cycle to ensure correct trajectory
-  floatData.sort((a, b) => a.cycle - b.cycle);
-  
-  // Extract coordinates
-  const latlngs = floatData.map(d => [d.latitude, d.longitude]);
-  
-  // Create a polyline for the trajectory
-  const polyline = L.polyline(latlngs, {
-    //color: colorScale(wmo),
-    color: "#F0F0F0",
-    weight: 3,
-    opacity: 0.7
+```js
+// SQL queries
+const pickDepthStr = pickDepth.length > 0 ? pickDepth.join(',') : 'NULL';
+
+const particle_filtered = await sql([`
+  SELECT park_depth, wmo, size, concentration, juld, zone
+  FROM particle
+  WHERE park_depth IN (${pickDepthStr})
+    AND size = ${pickSizeClass}
+    AND wmo = '${selectedWmo}'
+`]);
+
+const ost_filtered = await sql([`
+  SELECT *
+  FROM ost
+  WHERE park_depth IN (${pickDepthStr})
+    AND wmo = '${selectedWmo}'
+`]);
+
+const pss_filtered = await sql([`
+  SELECT *
+  FROM pss
+  WHERE park_depth IN (${pickDepthStr})
+    AND wmo = '${selectedWmo}'
+`]);
+```
+
+```js
+const nObservations = [...particle_filtered].length;
+const dateExtent = d3.extent(particle_filtered, d => d.juld);
+```
+
+```js
+// Leaflet map: all floats shown, click to select one
+const mapDiv = (() => {
+  const div = document.createElement("div");
+  div.style.height = "400px";
+  div.style.width = "100%";
+
+  const groupedData = d3.group(traj_argo, d => d.wmo);
+  const map = L.map(div).setView([0, 0], 2);
+
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png', {
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+    maxZoom: 20
   }).addTo(map);
 
-  // Add a tooltip with the WMO identifier
-  polyline.bindTooltip(`WMO: ${wmo}`, {
-    permanent: false,
-    direction: 'top',
-    opacity: 0.7
+  const allPolylines = [];
+
+  groupedData.forEach((floatData, wmoKey) => {
+    floatData.sort((a, b) => a.cycle - b.cycle);
+    const latlngs = floatData.map(d => [d.latitude, d.longitude]);
+    const isSelected = wmoKey === selectedWmo;
+    const baseColor = isSelected ? colorScale(String(wmoKey)) : "#555";
+    const baseWeight = isSelected ? 4 : 2;
+    const baseOpacity = isSelected ? 0.9 : 0.3;
+
+    const polyline = L.polyline(latlngs, {
+      color: baseColor,
+      weight: baseWeight,
+      opacity: baseOpacity
+    }).addTo(map);
+
+    polyline.bindTooltip(`WMO: ${wmoKey}`, {permanent: false, direction: 'top', opacity: 0.8});
+
+    polyline.on('click', function () {
+      // Update the select dropdown programmatically
+      const sel = document.querySelector('select[name="Float WMO"]') || document.querySelector('select');
+      if (sel) { sel.value = wmoKey; sel.dispatchEvent(new Event('input', {bubbles: true})); }
+    });
+
+    polyline.on('mouseover', function () {
+      this.setStyle({color: '#ffff00', weight: 5});
+      this.openTooltip();
+    });
+    polyline.on('mouseout', function () {
+      this.setStyle({color: baseColor, weight: baseWeight, opacity: baseOpacity});
+      this.closeTooltip();
+    });
+
+    allPolylines.push(polyline);
+
+    if (latlngs.length > 0) {
+      const marker = L.circleMarker(latlngs[latlngs.length - 1], {
+        color: isSelected ? "#B33951" : "#666",
+        fillColor: isSelected ? "black" : "#333",
+        fillOpacity: 0.5,
+        radius: isSelected ? 5 : 3
+      }).addTo(map);
+      marker.bindPopup(`Float: ${wmoKey}<br>Last update: ${floatData[floatData.length - 1].date}`);
+      marker.on('click', function () {
+        const sel = document.querySelector('select[name="Float WMO"]') || document.querySelector('select');
+        if (sel) { sel.value = wmoKey; sel.dispatchEvent(new Event('input', {bubbles: true})); }
+      });
+    }
   });
 
-  // Add hover effect
-  polyline.on('mouseover', function(e) {
-    this.setStyle({
-      color: 'black',
-      weight: 5
-    });
-    this.openTooltip();
-  });
-  polyline.on('mouseout', function(e) {
-    this.setStyle({
-      //color: colorScale(wmo),
-      color: '#F0F0F0',
-      weight: 5,
-      opacity: 0.7
-    });
-    this.closeTooltip();
-  });
-  
-  // Add to our array of all polylines
-  allPolylines.push(polyline);
-  
-  // Add a marker for the last position
-  L.circleMarker(latlngs[latlngs.length - 1], {
-    //color: colorScale(wmo),
-    color: "#B33951",
-    fillColor: "black",
-    fillOpacity: 0.5,
-    radius: 2
-  }).addTo(map)
-    .bindPopup(`Float: ${wmo}<br>Last update on ${floatData[floatData.length - 1].date}`);
-});
+  if (allPolylines.length > 0) {
+    const group = L.featureGroup(allPolylines);
+    map.fitBounds(group.getBounds().pad(0.1));
+  }
 
-// Create a feature group from all polylines
-const group = L.featureGroup(allPolylines);
+  requestAnimationFrame(() => map.invalidateSize());
+  return div;
+})();
 ```
 
 ```js
-// Create the particle plot (when floats have reached their parking depth)
 const particle_plot = resize((width) => Plot.plot({
   marks: [
     Plot.dot(particle_filtered, {
-      y: "concentration",
-      x: "juld",
-      fill: d => colorByRegion ? colorScale(d.zone) : colorScale(d.wmo), // Use the custom color scale
-      r: 1,
-      opacity: 0.5,
+      y: "concentration", x: "juld",
+      fill: d => colorByRegion ? zoneColorScale(d.zone) : colorScale(String(d.wmo)),
+      r: 1, opacity: 0.5
     }),
     Plot.tip(particle_filtered, Plot.pointer({
-      y: "concentration",
-      x: "juld",
-      title: d => `WMO: ${d.wmo}\nZone: ${d.zone}\nParking depth: ${d.park_depth.toFixed(0)} m`
+      y: "concentration", x: "juld",
+      title: d => `WMO: ${d.wmo}\nZone: ${d.zone}\nDepth: ${d.park_depth.toFixed(0)} m`
     })),
     Plot.crosshair(particle_filtered, {x: "juld", y: "concentration"}),
     Plot.lineY(particle_filtered, Plot.windowY({
-        k: 60,
-        reduce: "median",
-        x: "juld",
-        y: "concentration",
-        stroke: d => colorByRegion ? colorScale(d.zone) : colorScale(d.wmo),
-        strokeWidth: 3,
-        z: d => `${d.wmo}-${d.park_depth}`}), {sort: "juld"})
+      k: 60, reduce: "median", x: "juld", y: "concentration",
+      stroke: d => colorByRegion ? zoneColorScale(d.zone) : colorScale(String(d.wmo)),
+      strokeWidth: 3, z: d => `${d.wmo}-${d.park_depth}`
+    }), {sort: "juld"})
   ],
-  y: {
-    label: "Concentration (#/L)",
-    reverse: false
-  },
-  x: {
-    label: "Date"
-  },
-  width,
-  height: 500,
-  style: {
-    fontFamily: "sans-serif",
-    fontSize: 12
-  },
-  marginRight: 100  // Add right margin for the legend
-}))
+  y: {label: "Concentration (#/L)"},
+  x: {label: "Date"},
+  width, height: 400,
+  style: {fontFamily: "sans-serif", fontSize: 12}
+}));
 ```
 
 ```js
-// Particle size spectra plot
 const pss_plot = resize((width) => Plot.plot({
   marks: [
     Plot.dot(pss_filtered, {
-      y: "mean_slope",
-      x: "juld_date",
-      fill: d => colorByRegion ? colorScale(d.zone) : colorScale(d.wmo),  // Use the custom color scale
-      r: 3,
-      opacity: 0.5,
-      symbol: "park_depth"
+      y: "mean_slope", x: "juld_date",
+      fill: d => colorByRegion ? zoneColorScale(d.zone) : colorScale(String(d.wmo)),
+      r: 3, opacity: 0.5, symbol: "park_depth"
     }),
     Plot.tip(pss_filtered, Plot.pointer({
-      y: "mean_slope",
-      x: "juld_date",
-      title: d => `WMO: ${d.wmo}\nZone: ${d.zone}\nParking depth: ${d.park_depth} m`
+      y: "mean_slope", x: "juld_date",
+      title: d => `WMO: ${d.wmo}\nZone: ${d.zone}\nDepth: ${d.park_depth} m`
     })),
     Plot.lineY(pss_filtered, Plot.windowY({
-      k:12,
-      reduce: "median",
-      x: "juld_date",
-      y: "mean_slope",
-      stroke: d => colorByRegion ? colorScale(d.zone) : colorScale(d.wmo),
-      strokeWidth: 3,
-      z: d => `${d.wmo}-${d.park_depth}`})),
+      k: 12, reduce: "median", x: "juld_date", y: "mean_slope",
+      stroke: d => colorByRegion ? zoneColorScale(d.zone) : colorScale(String(d.wmo)),
+      strokeWidth: 3, z: d => `${d.wmo}-${d.park_depth}`
+    })),
     Plot.crosshair(pss_filtered, {x: "juld_date", y: "mean_slope"})
   ],
-  y: {
-    label: "Mean slope",
-    reverse: false
-  },
-  x: {
-    label: "Date",
-    type: "utc",
+  y: {label: "Mean slope"},
+  x: {label: "Date", type: "utc",
     tickFormat: d => {
       const date = new Date(d);
       return date.getUTCMonth() === 0 ? d3.utcFormat("Jan\n%Y")(date) : d3.utcFormat("%b")(date);
     }
   },
-  width,
-  height: 500,
-  style: {
-    fontFamily: "sans-serif",
-    fontSize: 12
-  },
-  marginRight: 100  // Add right margin for the legend
-}))
+  width, height: 400,
+  style: {fontFamily: "sans-serif", fontSize: 12}
+}));
 ```
 
 ```js
-// Optical sediment trap plot
 const ost_plot = resize((width) => Plot.plot({
   marks: [
     Plot.dot(ost_filtered, {
-      y: "total_flux",
-      x: "max_time",
-      fill: d => colorByRegion ? colorScale(d.zone) : colorScale(d.wmo),
-      r: 3,
-      opacity: 0.5,
-      symbol: "park_depth"
+      y: "total_flux", x: "max_time",
+      fill: d => colorByRegion ? zoneColorScale(d.zone) : colorScale(String(d.wmo)),
+      r: 3, opacity: 0.5, symbol: "park_depth"
     }),
     Plot.tip(ost_filtered, Plot.pointer({
-      y: "total_flux",
-      x: "max_time",
-      title: d => `WMO: ${d.wmo}\nZone: ${d.zone}\nParking depth: ${d.park_depth} m\nSmall flux: ${d.small_flux.toFixed(2)}\nLarge flux: ${d.large_flux.toFixed(2)}`
+      y: "total_flux", x: "max_time",
+      title: d => `WMO: ${d.wmo}\nZone: ${d.zone}\nDepth: ${d.park_depth} m\nSmall: ${d.small_flux.toFixed(2)}\nLarge: ${d.large_flux.toFixed(2)}`
     })),
     Plot.lineY(ost_filtered, Plot.windowY({
-      k:12,
-      reduce: "median",
-      x: "max_time",
-      y: "total_flux",
-      stroke: d => colorByRegion ? colorScale(d.zone) : colorScale(d.wmo),
-      strokeWidth: 3,
-      z: d => `${d.wmo}-${d.park_depth}`})),
+      k: 12, reduce: "median", x: "max_time", y: "total_flux",
+      stroke: d => colorByRegion ? zoneColorScale(d.zone) : colorScale(String(d.wmo)),
+      strokeWidth: 3, z: d => `${d.wmo}-${d.park_depth}`
+    })),
     Plot.crosshair(ost_filtered, {x: "max_time", y: "total_flux"})
   ],
-  y: {
-    label:  "Total particle flux (mg C m⁻² d⁻¹)",
-    reverse: false
-  },
-  x: {
-    label: "Date"
-  },
-  width,
-  height: 500,
-  style: {
-    fontFamily: "sans-serif",
-    fontSize: 12
-  },
-  marginRight: 100  // Add right margin for the legend
-}))
+  y: {label: "Total particle flux (mg C m-2 d-1)"},
+  x: {label: "Date"},
+  width, height: 400,
+  style: {fontFamily: "sans-serif", fontSize: 12}
+}));
 ```
 
-```js
-//const pointMax = Inputs.range([0, maxConcentration], {step: 1, value: maxConcentration, width: 60});
-```
+<div class="grid grid-cols-2">
+  <div class="card">
+    <h2>Observations</h2>
+    <span class="big">${nObservations.toLocaleString()}</span>
+  </div>
+  <div class="card">
+    <h2>Date range</h2>
+    <span class="big">${dateExtent[0] ? d3.utcFormat("%b %Y")(dateExtent[0]) : "---"} --- ${dateExtent[1] ? d3.utcFormat("%b %Y")(dateExtent[1]) : "---"}</span>
+  </div>
+</div>
 
-<div class="grid grid-cols-4" >
-  <div class="card grid-colspan-2 grid-rowspan-1" style="padding: 0px;">
+<div class="grid grid-cols-2">
+  <div class="card" style="padding: 0;">
     <div style="padding: 1rem;">
-      <h2><strong>Floats trajectories</strong></h2>
-      <h3>Red markers show the last float position</h3>
-      ${div}
+      <h2>Float trajectories</h2>
+      <h3>Click a trajectory to select it. Selected: ${selectedWmo}</h3>
+      ${mapDiv}
     </div>
   </div>
-  <div class="card grid-colspan-2 grid-rowspan-1">
-    <h2><strong>Particle size spectra</strong></h2>
-    <h3>A very negative slope in a particle size spectrum indicates that the concentration of particles decreases rapidly as the particle size increases.</h3>
+  <div class="card">
+    <h2>Particle size spectra</h2>
+    <h3>A very negative slope means concentration drops rapidly with particle size.</h3>
     ${pss_plot}
-</div>
-
-<div class="card grid-colspan-2 grid-rowspan-1">
-  <h2><strong>Particle concentrations at parking depth</strong></h2>
-  <h3>Measured with the <a href="http://www.hydroptic.com/index.php/public/Page/product_item/UVP6-LP">Underwater Vision Profiler 6 (UVP6).</a></h3>
-  <div style="display: flex; flex-direction: column; align-items: center;">
   </div>
-  ${particle_plot}
 </div>
 
-<div class="card grid-colspan-2 grid-rowspan-0.5">
-  <h2><strong>Total carbon flux derived from the optical sediment trap</strong></h2>
-  <h3>Total (small and large) particle flux computed following the method described in <a href='https://doi.org/10.1029/2022GB007624'>Terrats et al., (2023)</a></h3>
-  ${ost_plot}
+<div class="grid grid-cols-2">
+  <div class="card">
+    <h2>Particle concentrations at parking depth</h2>
+    <h3>Measured with the <a href="http://www.hydroptic.com/index.php/public/Page/product_item/UVP6-LP">UVP6</a>.</h3>
+    ${particle_plot}
+  </div>
+  <div class="card">
+    <h2>Total carbon flux (optical sediment trap)</h2>
+    <h3>Following <a href='https://doi.org/10.1029/2022GB007624'>Terrats et al. (2023)</a></h3>
+    ${ost_plot}
+  </div>
 </div>
 
 <div class="small note">
-  The Underwater Vision Profiler 6 (UVP6) is an underwater imaging system developed to measure the size and gray level of marine particles. A key feature of the UVP6 is its <a href= 'https://github.com/ecotaxa/uvpec'>integrated classification algorithm</a>, which can automatically categorize observed particles and organisms into various taxonomic groups.<br><br>
-  The transmissometer measures the transmittance of a light beam at a given wavelength through a medium. In order to get the data presented above, the transmissometer, mounted on autonomous floats, is vertically oriented to measure the particle accumulation on the upward-facing optical window when the float is drifting (i.e., parked at a specific depth). As a result, the transmissometer operates as an optical sediment trap (OST).<br><br>
-  A k-day moving median average has been applied to highlight the trends. k = 60 for the particle concentrations and k = 12 for the optical sediment trap and particle size spectra data.<br><br>
-  Outliers for both the particle concentrations and optical sediment trap plots were removed using the <a href='https://en.wikipedia.org/wiki/Interquartile_range#Outliers'>IQR method</a>.<br><br>
-  These data were collected and made freely available by the <a href="https://argo.ucsd.edu">International Argo Program</a> and the national programs that contribute to it. The Argo Program is part of the Global Ocean Observing System.
+  The UVP6 is an underwater imaging system that measures the size and gray level of marine particles, with an <a href='https://github.com/ecotaxa/uvpec'>integrated classification algorithm</a>.<br><br>
+  The transmissometer, mounted vertically on autonomous floats, measures particle accumulation on the upward-facing optical window at parking depth, functioning as an optical sediment trap (OST).<br><br>
+  Moving median smoothing: k=60 for particle concentrations, k=12 for OST and particle size spectra. Outliers removed via the <a href='https://en.wikipedia.org/wiki/Interquartile_range#Outliers'>IQR method</a>.<br><br>
+  Data from the <a href="https://argo.ucsd.edu">International Argo Program</a>.
 </div>

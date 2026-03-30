@@ -1,25 +1,18 @@
 import sys
 import pandas as pd
 import numpy as np
-import xarray as xr
-import s3fs
 import pyarrow as pa
 import pyarrow.parquet as pq
-from utils import remove_outliers, extract_LPM, assign_zone, WMO
-
-fs = s3fs.S3FileSystem(anon=True)
+from utils import remove_outliers, extract_LPM, assign_zone, open_nc_cached, WMO
 
 # Extract particle data for each float
 dfs = []
 
 for wmo in WMO:
     try:
-        with fs.open(
-            f"s3://argo-gdac-sandbox/pub/aux/coriolis/{wmo}/{wmo}_Rtraj_aux.nc", "rb"
-        ) as f:
-            ds = xr.open_dataset(f)
-            df = extract_LPM(ds)
-            dfs.append(df)
+        ds = open_nc_cached(f"s3://argo-gdac-sandbox/pub/aux/coriolis/{wmo}/{wmo}_Rtraj_aux.nc")
+        df = extract_LPM(ds)
+        dfs.append(df)
     except Exception as e:
         print(f"Error processing {wmo}: {e}", file=sys.stderr)
         continue

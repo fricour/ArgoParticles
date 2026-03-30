@@ -1,5 +1,68 @@
+import os
+import sys
+import tempfile
 import pandas as pd
 import numpy as np
+import xarray as xr
+import s3fs
+
+# --- S3 caching layer ---
+
+def get_cache_dir():
+    """Return the local cache directory for S3 files, creating it if needed."""
+    cache_dir = os.path.join(os.path.dirname(__file__), ".cache", "s3")
+    os.makedirs(cache_dir, exist_ok=True)
+    return cache_dir
+
+def download_s3_cached(s3_path):
+    """Download an S3 file to local cache if not already present. Returns local path."""
+    # Build a safe local filename from the S3 key
+    safe_name = s3_path.replace("s3://", "").replace("/", "__")
+    local_path = os.path.join(get_cache_dir(), safe_name)
+
+    if not os.path.exists(local_path):
+        print(f"Downloading {s3_path} ...", file=sys.stderr)
+        fs = s3fs.S3FileSystem(anon=True)
+        # Atomic write: download to temp file, then rename
+        fd, tmp_path = tempfile.mkstemp(dir=get_cache_dir())
+        try:
+            os.close(fd)
+            fs.get(s3_path, tmp_path)
+            os.rename(tmp_path, local_path)
+        except Exception:
+            # Clean up temp file on failure
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+            raise
+    else:
+        print(f"Using cached {s3_path}", file=sys.stderr)
+
+    return local_path
+
+def open_nc_cached(s3_path):
+    """Download a NetCDF file from S3 (cached) and return an xarray Dataset."""
+    local_path = download_s3_cached(s3_path)
+    return xr.open_dataset(local_path)
+
+# --- Dynamic WMO list ---
+
+def get_wmo_list():
+    """Fetch the list of WMOs with LPM data from the S3 aux-profile index."""
+    local_path = download_s3_cached(
+        "s3://argo-gdac-sandbox/pub/idx/argo_aux-profile_index.txt"
+    )
+    df = pd.read_csv(local_path, comment="#", sep=",")
+    wmos = (
+        df[df["parameters"].str.contains("BLACK_NB_SIZE_SPECTRA_PARTICLES", na=False)]
+        ["file"]
+        .str.extract(r"(\d{7})")[0]
+        .dropna()
+        .astype(int)
+        .unique()
+    )
+    return sorted(wmos)
+
+# --- Utility functions ---
 
 def remove_outliers(series):
     """Remove outliers based on IQR method"""
@@ -102,11 +165,12 @@ def assign_zone(wmo):
             return zone
     return None
 
-# Define WMO floats
-WMO = [1902578, 1902593, 1902601, 1902637, 1902685, 2903783, 2903787, 2903794, 
-        3902471, 3902498, 4903634, 4903657, 4903658, 4903660, 4903739, 4903740, 
-        5906970, 6904240, 6904241, 6990503, 6990514, 7901028]
-
-# Used for tests
-#WMO = [1902578, 6990503]
-#WMO=[1902578]
+# WMO list: override with WMO_TEST env var for quick single-float testing
+# Usage: WMO_TEST=1902578 npm run build
+_wmo_test = os.environ.get("WMO_TEST")
+if _wmo_test:
+    WMO = [int(w) for w in _wmo_test.split(",")]
+    print(f"TEST MODE: using {len(WMO)} WMO(s): {WMO}", file=sys.stderr)
+else:
+    WMO = get_wmo_list()
+    print(f"Found {len(WMO)} WMO floats with LPM data", file=sys.stderr)

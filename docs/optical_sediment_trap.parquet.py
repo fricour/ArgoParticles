@@ -1,13 +1,9 @@
 import numpy as np
 import pandas as pd
-import xarray as xr
 import sys
-import s3fs
 import pyarrow as pa
 import pyarrow.parquet as pq
-from utils import assign_zone, WMO
-
-fs = s3fs.S3FileSystem(anon=True)
+from utils import assign_zone, open_nc_cached, WMO
 
 
 def slide(x, k, fun, n=1, **kwargs):
@@ -375,13 +371,10 @@ def extract_ost_data(wmo, ds):
 dfs = []
 for wmo in WMO:
     try:
-        with fs.open(
-            f"s3://argo-gdac-sandbox/pub/dac/coriolis/{wmo}/{wmo}_Rtraj.nc", "rb"
-        ) as f:
-            ds = xr.open_dataset(f)
-            result = extract_ost_data(wmo, ds)
-            if len(result) > 0:
-                dfs.append(result)
+        ds = open_nc_cached(f"s3://argo-gdac-sandbox/pub/dac/coriolis/{wmo}/{wmo}_Rtraj.nc")
+        result = extract_ost_data(wmo, ds)
+        if len(result) > 0:
+            dfs.append(result)
     except Exception as e:
         print(f"Error processing {wmo}: {e}", file=sys.stderr)
         continue

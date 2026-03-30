@@ -1,13 +1,10 @@
-import s3fs
 import pandas as pd
 import sys
-from utils import WMO
+from utils import download_s3_cached, WMO
 
-fs = s3fs.S3FileSystem(anon=True)
-
-# Read the text file
-with fs.open("s3://argo-gdac-sandbox/pub/idx/argo_bio-profile_index.txt", "rb") as f:
-    df = pd.read_csv(f, comment="#", sep=",")
+# Read the text file (cached)
+local_path = download_s3_cached("s3://argo-gdac-sandbox/pub/idx/argo_bio-profile_index.txt")
+df = pd.read_csv(local_path, comment="#", sep=",")
 
 # Process the dataframe
 tmp = (
