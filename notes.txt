@@ -1,3 +1,7 @@
 1) source dev/bin/activate
 2) For testing: rm -rf docs/.observablehq/cache && WMO_TEST=1902578 npm run build (or directly rm -rf docs/.observablehq/cache && WMO_TEST=1902578 npm run dev)
 3) npm run dev
+
+For multiple floats:
+rm -rf docs/.observablehq/cache && WMO_TEST=1902578,1902593,1902601,1902637 npm run dev
+

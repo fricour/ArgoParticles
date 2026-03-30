@@ -55,6 +55,7 @@ const colorByRegion = view(Inputs.toggle({
   label: "Colour by region",
   value: false
 }));
+
 ```
 
 ```js
@@ -94,6 +95,7 @@ const nObservations = [...particle_filtered].length;
 const dateExtent = d3.extent(particle_filtered, d => d.juld);
 ```
 
+
 ```js
 // Leaflet map: all floats shown, click to toggle selection
 const mapDiv = (() => {
@@ -116,9 +118,9 @@ const mapDiv = (() => {
     floatData.sort((a, b) => a.cycle - b.cycle);
     const latlngs = floatData.map(d => [d.latitude, d.longitude]);
     const isSelected = selected.has(wmoKey);
-    const baseColor = isSelected ? colorScale(String(wmoKey)) : "#555";
+    const baseColor = isSelected ? colorScale(String(wmoKey)) : "#F0F0F0";
     const baseWeight = isSelected ? 4 : 2;
-    const baseOpacity = isSelected ? 0.9 : 0.3;
+    const baseOpacity = isSelected ? 0.9 : 0.5;
 
     const polyline = L.polyline(latlngs, {
       color: baseColor,
@@ -129,7 +131,7 @@ const mapDiv = (() => {
     polyline.bindTooltip(`WMO: ${wmoKey}${isSelected ? " ✓" : ""}`, {permanent: false, direction: 'top', opacity: 0.8});
 
     polyline.on('mouseover', function () {
-      this.setStyle({color: '#ffff00', weight: 5});
+      this.setStyle({color: '#F0F0F0', weight: 5});
       this.openTooltip();
     });
     polyline.on('mouseout', function () {
@@ -152,12 +154,20 @@ const mapDiv = (() => {
 
   if (allPolylines.length > 0) {
     const group = L.featureGroup(allPolylines);
-    map.fitBounds(group.getBounds(), {padding: [20, 20], maxZoom: 4});
+    map.fitBounds(group.getBounds(), {padding: [30, 30], maxZoom: 1});
   }
 
   requestAnimationFrame(() => map.invalidateSize());
   return div;
 })();
+```
+
+```js
+const maxConcentrationInput = Inputs.range([0, 10000], {label: "Max Y-axis", step: 1, value: 20});
+const maxConcentration = Generators.input(maxConcentrationInput);
+
+const maxFluxInput = Inputs.range([0, 1500], {label: "Max Y-axis", step: 10, value: 200});
+const maxFlux = Generators.input(maxFluxInput);
 ```
 
 ```js
@@ -179,8 +189,9 @@ const particle_plot = resize((width) => Plot.plot({
       strokeWidth: 3, z: d => `${d.wmo}-${d.park_depth}`
     }), {sort: "juld"})
   ],
-  y: {label: "Concentration (#/L)"},
+  y: {label: "Concentration (#/L)", domain: [0, maxConcentration]},
   x: {label: "Date"},
+  clip: true,
   color: colorByRegion
     ? {legend: true, domain: zones, range: zoneColorScale.range()}
     : {legend: true, domain: selectedWmos.map(String), range: selectedWmos.map(w => colorScale(String(w)))},
@@ -242,8 +253,9 @@ const ost_plot = resize((width) => Plot.plot({
     })),
     Plot.crosshair(ost_filtered, {x: "max_time", y: "total_flux"})
   ],
-  y: {label: "Total particle flux (mg C m-2 d-1)"},
+  y: {label: "Total particle flux (mg C m⁻² d⁻¹)", domain: [0, maxFlux]},
   x: {label: "Date"},
+  clip: true,
   color: colorByRegion
     ? {legend: true, domain: zones, range: zoneColorScale.range()}
     : {legend: true, domain: selectedWmos.map(String), range: selectedWmos.map(w => colorScale(String(w)))},
@@ -282,11 +294,13 @@ const ost_plot = resize((width) => Plot.plot({
   <div class="card">
     <h2>Particle concentrations at parking depth</h2>
     <h3>Measured with the <a href="http://www.hydroptic.com/index.php/public/Page/product_item/UVP6-LP">UVP6</a>.</h3>
+    ${maxConcentrationInput}
     ${particle_plot}
   </div>
   <div class="card">
     <h2>Total carbon flux (optical sediment trap)</h2>
     <h3>Following <a href='https://doi.org/10.1029/2022GB007624'>Terrats et al. (2023)</a></h3>
+    ${maxFluxInput}
     ${ost_plot}
   </div>
 </div>
