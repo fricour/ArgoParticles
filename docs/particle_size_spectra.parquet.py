@@ -167,12 +167,16 @@ for wmo in WMO:
     try:
         ds = open_nc_cached(f"s3://argo-gdac-sandbox/pub/aux/coriolis/{wmo}/{wmo}_Rtraj_aux.nc")
         df = compute_spectral_slope(wmo, ds)
-        dfs.append(df)
+        if len(df) > 0:
+            dfs.append(df)
     except Exception as e:
         print(f"Error processing {wmo}: {e}", file=sys.stderr)
         continue
 
 # Combine all dataframes
+if len(dfs) == 0:
+    print("No data found for any WMO", file=sys.stderr)
+    sys.exit(1)
 tmp = pd.concat(dfs, ignore_index=True)
 
 

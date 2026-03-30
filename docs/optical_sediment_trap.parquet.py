@@ -380,6 +380,9 @@ for wmo in WMO:
         continue
 
 # Concatenate all results
+if len(dfs) == 0:
+    print("No data found for any WMO", file=sys.stderr)
+    sys.exit(1)
 tmp = pd.concat(dfs, ignore_index=True)
 
 # Assign oceanic zone

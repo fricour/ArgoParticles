@@ -52,9 +52,11 @@ def get_wmo_list():
         "s3://argo-gdac-sandbox/pub/idx/argo_aux-profile_index.txt"
     )
     df = pd.read_csv(local_path, comment="#", sep=",")
+    mask = (
+        df["parameters"].str.contains("NB_SIZE_SPECTRA_PARTICLES", na=False)
+    )
     wmos = (
-        df[df["parameters"].str.contains("BLACK_NB_SIZE_SPECTRA_PARTICLES", na=False)]
-        ["file"]
+        df[mask]["file"]
         .str.extract(r"(\d{7})")[0]
         .dropna()
         .astype(int)
