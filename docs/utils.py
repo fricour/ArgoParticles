@@ -45,7 +45,7 @@ def open_nc_cached(s3_path):
     try:
         return xr.open_dataset(local_path, engine="scipy")
     except Exception:
-        return xr.open_dataset(local_path, engine="h5netcdf")
+        return xr.open_dataset(local_path, engine="netcdf4")
 
 # --- Dynamic WMO list ---
 

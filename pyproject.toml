@@ -5,8 +5,7 @@ description = "Dashboard for visualizing particle data from Biogeochemical-Argo 
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "h5netcdf",
-    "h5py",
+    "netcdf4",
     "numpy",
     "pandas",
     "pyarrow",
