@@ -150,6 +150,160 @@ def extract_LPM(ds):
 
     return df
 
+def extract_taxo(ds):
+    """Extract taxo data at parking depth from NetCDF file"""
+
+    # Extract variables
+    pres = ds["PRES"].values
+    mc = ds["MEASUREMENT_CODE"].values
+    juld = ds["JULD"].values
+    cycle = ds["CYCLE_NUMBER"].values
+    wmo = ds["PLATFORM_NUMBER"].values.astype(str).item().strip()
+    taxo_concentration = ds["CONCENTRATION_CATEGORY"].values[:, 0:20]
+    index_category = ds["INDEX_CATEGORY"].values[:, 0:20]
+
+    taxo_classes = [
+        "Acantharia",          # 0
+        "Actinopterygii",      # 1
+        "Appendicularia",      # 2
+        "Aulacanthidae",       # 3
+        "Calanoida",           # 4
+        "Chaetognatha",        # 5
+        "Collodaria",          # 6
+        "Creseis",             # 7
+        "Foraminifera",        # 8
+        "Rhizaria",            # 9
+        "Salpida",             # 10
+        "artefact",            # 11
+        "crystal",             # 12
+        "detritus",            # 13
+        "fiber",               # 14
+        "other<living",        # 15
+        "puff",                # 16
+        "small-bell<Hydrozoa", # 17
+        "solitaryglobule",     # 18
+        "tuff",                # 19
+    ]
+
+    # Remap concentrations using INDEX_CATEGORY to place values in correct taxo columns
+    n_obs = taxo_concentration.shape[0]
+    remapped = np.full((n_obs, 20), np.nan)
+    for i in range(n_obs):
+        for j in range(20):
+            idx = index_category[i, j]
+            if not np.isnan(idx):
+                idx = int(idx)
+                if 0 <= idx < 20:
+                    remapped[i, idx] = taxo_concentration[i, j]
+
+    df = pd.DataFrame(remapped, columns=taxo_classes)
+
+    # Add metadata
+    df["depth"] = pres
+    df["mc"] = mc
+    df["cycle"] = cycle
+    df["juld"] = juld
+    df["wmo"] = wmo
+
+    # Filter and clean
+    df = (df
+        .query("mc == 290")  # only keep data when the float is parked
+        .drop(columns=["mc"])  # remove measurement code (not needed anymore)
+        .assign(
+            park_depth=lambda x: np.where(
+                x["depth"] < 350, 200, np.where(x["depth"] > 750, 1000, 500)
+            )
+        )
+        .query('juld > "2021-01-01" and juld < "2028-01-01"') # because some crazy dates were found at some time ...
+        .astype({"cycle": int})
+        .reset_index()
+    )
+
+    # Reorder columns
+    cols = ["depth", "park_depth", "cycle", "juld", "wmo"] + taxo_classes
+    df = df[cols]
+
+    ds.close()
+
+    return df
+
+def extract_biovolume(ds):
+    """Extract biovolume data at parking depth from NetCDF file"""
+
+    # Extract variables
+    pres = ds["PRES"].values
+    mc = ds["MEASUREMENT_CODE"].values
+    juld = ds["JULD"].values
+    cycle = ds["CYCLE_NUMBER"].values
+    wmo = ds["PLATFORM_NUMBER"].values.astype(str).item().strip()
+    biovolume = ds["BIOVOLUME_CATEGORY"].values[:, 0:20]
+    index_category = ds["INDEX_CATEGORY"].values[:, 0:20]
+
+    taxo_classes = [
+        "Acantharia",          # 0
+        "Actinopterygii",      # 1
+        "Appendicularia",      # 2
+        "Aulacanthidae",       # 3
+        "Calanoida",           # 4
+        "Chaetognatha",        # 5
+        "Collodaria",          # 6
+        "Creseis",             # 7
+        "Foraminifera",        # 8
+        "Rhizaria",            # 9
+        "Salpida",             # 10
+        "artefact",            # 11
+        "crystal",             # 12
+        "detritus",            # 13
+        "fiber",               # 14
+        "other<living",        # 15
+        "puff",                # 16
+        "small-bell<Hydrozoa", # 17
+        "solitaryglobule",     # 18
+        "tuff",                # 19
+    ]
+
+    # Remap concentrations using INDEX_CATEGORY to place values in correct taxo columns
+    n_obs = biovolume.shape[0]
+    remapped = np.full((n_obs, 20), np.nan)
+    for i in range(n_obs):
+        for j in range(20):
+            idx = index_category[i, j]
+            if not np.isnan(idx):
+                idx = int(idx)
+                if 0 <= idx < 20:
+                    remapped[i, idx] = biovolume[i, j]
+
+    df = pd.DataFrame(remapped, columns=taxo_classes)
+
+    # Add metadata
+    df["depth"] = pres
+    df["mc"] = mc
+    df["cycle"] = cycle
+    df["juld"] = juld
+    df["wmo"] = wmo
+
+    # Filter and clean
+    df = (df
+        .query("mc == 290")  # only keep data when the float is parked
+        .drop(columns=["mc"])  # remove measurement code (not needed anymore)
+        .assign(
+            park_depth=lambda x: np.where(
+                x["depth"] < 350, 200, np.where(x["depth"] > 750, 1000, 500)
+            )
+        )
+        .query('juld > "2021-01-01" and juld < "2028-01-01"') # because some crazy dates were found at some time ... -> should use QC on the JULD variable instead, but it seems to be missing in some files, so let's just filter on reasonable dates for now
+        .astype({"cycle": int})
+        .reset_index()
+    )
+
+    # Reorder columns
+    cols = ["depth", "park_depth", "cycle", "juld", "wmo"] + taxo_classes
+    df = df[cols]
+
+    ds.close()
+
+    return df
+
 # WMO list: override with WMO_TEST env var for quick single-float testing
 # Usage: WMO_TEST=1902578 npm run build
 _wmo_test = os.environ.get("WMO_TEST")
