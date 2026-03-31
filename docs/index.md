@@ -29,22 +29,24 @@ const colorScale = d3.scaleOrdinal()
 ```
 
 ```js
-const pickSizeClass = view(Inputs.select(lpm_classes, {
-  label: "Size class (um)",
-  value: 102
-}));
+// Size class: input + generator so we can place it inside the particle card
+const pickSizeClassInput = Inputs.select(lpm_classes, {label: "Size class (um)", value: 102});
+const pickSizeClass = Generators.input(pickSizeClassInput);
 
-const pickDepth = view(Inputs.checkbox(park_depths, {
+const pickDepthInput = Inputs.checkbox(park_depths, {
   label: "Parking depth (m)",
   value: [1000]
-}));
+});
+const pickDepth = Generators.input(pickDepthInput);
 
-const pickFloat = view(Inputs.select(wmo, {
+const pickFloatInput = Inputs.select(wmo, {
   label: "Float WMO",
   multiple: true,
   value: [wmo[0]]
-}));
-
+});
+const sel = pickFloatInput.querySelector("select");
+if (sel) { sel.size = 6; }
+const pickFloat = Generators.input(pickFloatInput);
 ```
 
 ```js
@@ -56,7 +58,9 @@ const selectedWmos = Array.from(pickFloat);
 const pickDepthStr = pickDepth.length > 0 ? pickDepth.join(',') : 'NULL';
 const pickFloatStr = selectedWmos.length > 0 ? selectedWmos.map(d => `'${d}'`).join(',') : 'NULL';
 
-const particle_filtered = await sql([`
+const particle_filtered = (pickDepth.length === 0 || selectedWmos.length === 0)
+  ? []
+  : await sql([`
   SELECT park_depth, wmo, size, concentration, juld
   FROM particle
   WHERE park_depth IN (${pickDepthStr})
@@ -64,14 +68,18 @@ const particle_filtered = await sql([`
     AND wmo IN (${pickFloatStr})
 `]);
 
-const ost_filtered = await sql([`
+const ost_filtered = (pickDepth.length === 0 || selectedWmos.length === 0)
+  ? []
+  : await sql([`
   SELECT *
   FROM ost
   WHERE park_depth IN (${pickDepthStr})
     AND wmo IN (${pickFloatStr})
 `]);
 
-const pss_filtered = await sql([`
+const pss_filtered = (pickDepth.length === 0 || selectedWmos.length === 0)
+  ? []
+  : await sql([`
   SELECT *
   FROM pss
   WHERE park_depth IN (${pickDepthStr})
@@ -80,8 +88,6 @@ const pss_filtered = await sql([`
 ```
 
 ```js
-const nObservations = [...particle_filtered].length;
-const dateExtent = d3.extent(particle_filtered, d => d.juld);
 ```
 
 
@@ -152,10 +158,22 @@ const mapDiv = (() => {
 ```
 
 ```js
-const maxConcentrationInput = Inputs.range([0, 1000], {label: "Max Y-axis", step: 1, value: 20});
+const medianConcentration = (() => {
+  const vals = [...particle_filtered].map(d => d.concentration).filter(v => v != null).sort((a, b) => a - b);
+  if (vals.length === 0) return 20;
+  return Math.ceil(vals[Math.floor(vals.length / 2)] * 2);
+})();
+
+const medianFlux = (() => {
+  const vals = [...ost_filtered].map(d => d.total_flux).filter(v => v != null).sort((a, b) => a - b);
+  if (vals.length === 0) return 200;
+  return Math.ceil(vals[Math.floor(vals.length / 2)] * 3);
+})();
+
+const maxConcentrationInput = Inputs.range([0, 1000], {label: "Max Y-axis", step: 1, value: medianConcentration});
 const maxConcentration = Generators.input(maxConcentrationInput);
 
-const maxFluxInput = Inputs.range([0, 1000], {label: "Max Y-axis", step: 10, value: 200});
+const maxFluxInput = Inputs.range([0, 1000], {label: "Max Y-axis", step: 10, value: medianFlux});
 const maxFlux = Generators.input(maxFluxInput);
 ```
 
@@ -247,16 +265,11 @@ const ost_plot = resize((width) => Plot.plot({
 }));
 ```
 
-<div class="grid grid-cols-2">
-  <div class="card">
-    <h2>Observations</h2>
-    <span class="big">${nObservations.toLocaleString()}</span>
-  </div>
-  <div class="card">
-    <h2>Date range</h2>
-    <span class="big">${dateExtent[0] ? d3.utcFormat("%b %Y")(dateExtent[0]) : "---"} - ${dateExtent[1] ? d3.utcFormat("%b %Y")(dateExtent[1]) : "---"}</span>
-  </div>
+<div class="card">
+  ${pickDepthInput}
+  ${pickFloatInput}
 </div>
+
 
 <div class="grid grid-cols-2">
   <div class="card" style="padding: 0;">
@@ -277,6 +290,7 @@ const ost_plot = resize((width) => Plot.plot({
   <div class="card">
     <h2>Particle concentrations at parking depth</h2>
     <h3>Measured with the <a href="http://www.hydroptic.com/index.php/public/Page/product_item/UVP6-LP">UVP6</a>.</h3>
+    ${pickSizeClassInput}
     ${maxConcentrationInput}
     ${particle_plot}
   </div>
