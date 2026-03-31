@@ -163,10 +163,10 @@ const mapDiv = (() => {
 ```
 
 ```js
-const maxConcentrationInput = Inputs.range([0, 10000], {label: "Max Y-axis", step: 1, value: 20});
+const maxConcentrationInput = Inputs.range([0, 1000], {label: "Max Y-axis", step: 1, value: 20});
 const maxConcentration = Generators.input(maxConcentrationInput);
 
-const maxFluxInput = Inputs.range([0, 1500], {label: "Max Y-axis", step: 10, value: 200});
+const maxFluxInput = Inputs.range([0, 1000], {label: "Max Y-axis", step: 10, value: 200});
 const maxFlux = Generators.input(maxFluxInput);
 ```
 

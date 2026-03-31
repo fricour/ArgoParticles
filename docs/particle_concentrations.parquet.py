@@ -37,8 +37,9 @@ tmp = (
     tmp.groupby(["wmo", "size", "cycle", "park_depth"], group_keys=False)
     .apply(lambda x: x.assign(concentration=remove_outliers(x["concentration"])))
     .dropna(subset=["concentration"])
-    .reset_index(drop=True)
+    .reset_index(drop=False)
 )
+tmp = tmp.loc[:, ~tmp.columns.duplicated()]
 
 # Add oceanic zones
 tmp["zone"] = tmp["wmo"].astype(int).apply(assign_zone)
