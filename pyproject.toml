@@ -1,0 +1,16 @@
+[project]
+name = "particledashboard"
+version = "0.1.0"
+description = "Dashboard for visualizing particle data from Biogeochemical-Argo floats"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy",
+    "pandas",
+    "pyarrow",
+    "s3fs",
+    "xarray",
+]
+
+[project.scripts]
+particledashboard = "main:main"

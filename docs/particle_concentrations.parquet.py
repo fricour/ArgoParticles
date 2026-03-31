@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 import pyarrow as pa
 import pyarrow.parquet as pq
-from utils import remove_outliers, extract_LPM, assign_zone, open_nc_cached, WMO
+from utils import remove_outliers, extract_LPM, open_nc_cached, WMO
 
 # Extract particle data for each float
 dfs = []
@@ -40,9 +40,6 @@ tmp = (
     .reset_index(drop=False)
 )
 tmp = tmp.loc[:, ~tmp.columns.duplicated()]
-
-# Add oceanic zones
-tmp["zone"] = tmp["wmo"].astype(int).apply(assign_zone)
 
 # Based on https://observablehq.observablehq.cloud/framework-example-loader-python-to-parquet/
 # Write DataFrame to a temporary file-like object

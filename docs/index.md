@@ -17,9 +17,6 @@ const traj_argo = FileAttachment("trajectories.csv").csv({typed: true});
 ```js
 const wmo = [...new Set(traj_argo.map(d => d.wmo))].sort((a, b) => a - b);
 
-const zones_result = await sql([`SELECT DISTINCT zone FROM particle WHERE zone IS NOT NULL ORDER BY zone`]);
-const zones = [...zones_result].map(d => d.zone);
-
 const lpm_classes = [50.8, 64, 80.6, 102, 128, 161, 203, 256, 323, 406, 512, 645, 813, 1020, 1290, 1630, 2050, 2580];
 const park_depths = [200, 500, 1000];
 ```
@@ -29,9 +26,6 @@ const colorScale = d3.scaleOrdinal()
   .domain(wmo.map(String))
   .range(d3.schemeCategory10.concat(d3.schemeSet1, d3.schemeDark2));
 
-const zoneColorScale = d3.scaleOrdinal()
-  .domain(zones)
-  .range(d3.schemeTableau10.concat(["#aec7e8"]));
 ```
 
 ```js
@@ -51,11 +45,6 @@ const pickFloat = view(Inputs.select(wmo, {
   value: [wmo[0]]
 }));
 
-const colorByRegion = view(Inputs.toggle({
-  label: "Colour by region",
-  value: false
-}));
-
 ```
 
 ```js
@@ -68,7 +57,7 @@ const pickDepthStr = pickDepth.length > 0 ? pickDepth.join(',') : 'NULL';
 const pickFloatStr = selectedWmos.length > 0 ? selectedWmos.map(d => `'${d}'`).join(',') : 'NULL';
 
 const particle_filtered = await sql([`
-  SELECT park_depth, wmo, size, concentration, juld, zone
+  SELECT park_depth, wmo, size, concentration, juld
   FROM particle
   WHERE park_depth IN (${pickDepthStr})
     AND size = ${pickSizeClass}
@@ -175,26 +164,24 @@ const particle_plot = resize((width) => Plot.plot({
   marks: [
     Plot.dot(particle_filtered, {
       y: "concentration", x: "juld",
-      fill: d => colorByRegion ? zoneColorScale(d.zone) : colorScale(String(d.wmo)),
+      fill: d => colorScale(String(d.wmo)),
       r: 1, opacity: 0.5
     }),
     Plot.tip(particle_filtered, Plot.pointer({
       y: "concentration", x: "juld",
-      title: d => `WMO: ${d.wmo}\nZone: ${d.zone}\nDepth: ${d.park_depth.toFixed(0)} m`
+      title: d => `WMO: ${d.wmo}\nDepth: ${d.park_depth.toFixed(0)} m`
     })),
     Plot.crosshair(particle_filtered, {x: "juld", y: "concentration"}),
     Plot.lineY(particle_filtered, Plot.windowY({
       k: 60, reduce: "median", x: "juld", y: "concentration",
-      stroke: d => colorByRegion ? zoneColorScale(d.zone) : colorScale(String(d.wmo)),
+      stroke: d => colorScale(String(d.wmo)),
       strokeWidth: 3, z: d => `${d.wmo}-${d.park_depth}`
     }), {sort: "juld"})
   ],
   y: {label: "Concentration (#/L)", domain: [0, maxConcentration]},
   x: {label: "Date"},
   clip: true,
-  color: colorByRegion
-    ? {legend: true, domain: zones, range: zoneColorScale.range()}
-    : {legend: true, domain: selectedWmos.map(String), range: selectedWmos.map(w => colorScale(String(w)))},
+  color: {legend: true, domain: selectedWmos.map(String), range: selectedWmos.map(w => colorScale(String(w)))},
   width, height: 400,
   style: {fontFamily: "sans-serif", fontSize: 12}
 }));
@@ -205,16 +192,16 @@ const pss_plot = resize((width) => Plot.plot({
   marks: [
     Plot.dot(pss_filtered, {
       y: "mean_slope", x: "juld_date",
-      fill: d => colorByRegion ? zoneColorScale(d.zone) : colorScale(String(d.wmo)),
+      fill: d => colorScale(String(d.wmo)),
       r: 3, opacity: 0.5, symbol: "park_depth"
     }),
     Plot.tip(pss_filtered, Plot.pointer({
       y: "mean_slope", x: "juld_date",
-      title: d => `WMO: ${d.wmo}\nZone: ${d.zone}\nDepth: ${d.park_depth} m`
+      title: d => `WMO: ${d.wmo}\nDepth: ${d.park_depth} m`
     })),
     Plot.lineY(pss_filtered, Plot.windowY({
       k: 12, reduce: "median", x: "juld_date", y: "mean_slope",
-      stroke: d => colorByRegion ? zoneColorScale(d.zone) : colorScale(String(d.wmo)),
+      stroke: d => colorScale(String(d.wmo)),
       strokeWidth: 3, z: d => `${d.wmo}-${d.park_depth}`
     })),
     Plot.crosshair(pss_filtered, {x: "juld_date", y: "mean_slope"})
@@ -226,9 +213,7 @@ const pss_plot = resize((width) => Plot.plot({
       return date.getUTCMonth() === 0 ? d3.utcFormat("Jan\n%Y")(date) : d3.utcFormat("%b")(date);
     }
   },
-  color: colorByRegion
-    ? {legend: true, domain: zones, range: zoneColorScale.range()}
-    : {legend: true, domain: selectedWmos.map(String), range: selectedWmos.map(w => colorScale(String(w)))},
+  color: {legend: true, domain: selectedWmos.map(String), range: selectedWmos.map(w => colorScale(String(w)))},
   width, height: 400,
   style: {fontFamily: "sans-serif", fontSize: 12}
 }));
@@ -239,16 +224,16 @@ const ost_plot = resize((width) => Plot.plot({
   marks: [
     Plot.dot(ost_filtered, {
       y: "total_flux", x: "max_time",
-      fill: d => colorByRegion ? zoneColorScale(d.zone) : colorScale(String(d.wmo)),
+      fill: d => colorScale(String(d.wmo)),
       r: 3, opacity: 0.5, symbol: "park_depth"
     }),
     Plot.tip(ost_filtered, Plot.pointer({
       y: "total_flux", x: "max_time",
-      title: d => `WMO: ${d.wmo}\nZone: ${d.zone}\nDepth: ${d.park_depth} m\nSmall: ${d.small_flux.toFixed(2)}\nLarge: ${d.large_flux.toFixed(2)}`
+      title: d => `WMO: ${d.wmo}\nDepth: ${d.park_depth} m\nSmall: ${d.small_flux.toFixed(2)}\nLarge: ${d.large_flux.toFixed(2)}`
     })),
     Plot.lineY(ost_filtered, Plot.windowY({
       k: 12, reduce: "median", x: "max_time", y: "total_flux",
-      stroke: d => colorByRegion ? zoneColorScale(d.zone) : colorScale(String(d.wmo)),
+      stroke: d => colorScale(String(d.wmo)),
       strokeWidth: 3, z: d => `${d.wmo}-${d.park_depth}`
     })),
     Plot.crosshair(ost_filtered, {x: "max_time", y: "total_flux"})
@@ -256,9 +241,7 @@ const ost_plot = resize((width) => Plot.plot({
   y: {label: "Total particle flux (mg C m⁻² d⁻¹)", domain: [0, maxFlux]},
   x: {label: "Date"},
   clip: true,
-  color: colorByRegion
-    ? {legend: true, domain: zones, range: zoneColorScale.range()}
-    : {legend: true, domain: selectedWmos.map(String), range: selectedWmos.map(w => colorScale(String(w)))},
+  color: {legend: true, domain: selectedWmos.map(String), range: selectedWmos.map(w => colorScale(String(w)))},
   width, height: 400,
   style: {fontFamily: "sans-serif", fontSize: 12}
 }));

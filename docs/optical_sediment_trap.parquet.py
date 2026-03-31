@@ -3,7 +3,7 @@ import pandas as pd
 import sys
 import pyarrow as pa
 import pyarrow.parquet as pq
-from utils import assign_zone, open_nc_cached, WMO
+from utils import open_nc_cached, WMO
 
 
 def slide(x, k, fun, n=1, **kwargs):
@@ -384,9 +384,6 @@ if len(dfs) == 0:
     print("No data found for any WMO", file=sys.stderr)
     sys.exit(1)
 tmp = pd.concat(dfs, ignore_index=True)
-
-# Assign oceanic zone
-tmp["zone"] = tmp["wmo"].astype(int).apply(assign_zone)
 
 # Ensure wmo is string type
 tmp["wmo"] = tmp["wmo"].astype(str)

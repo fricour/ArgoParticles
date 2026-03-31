@@ -53,7 +53,7 @@ def get_wmo_list():
     )
     df = pd.read_csv(local_path, comment="#", sep=",")
     mask = (
-        df["parameters"].str.contains("NB_SIZE_SPECTRA_PARTICLES", na=False)
+        df["parameters"].str.contains("CONCENTRATION_LPM", na=False)
     )
     wmos = (
         df[mask]["file"]
@@ -84,8 +84,9 @@ def extract_LPM(ds):
     juld = ds["JULD"].values
     cycle = ds["CYCLE_NUMBER"].values
     wmo = ds["PLATFORM_NUMBER"].values.astype(str).item().strip()
-    part_spectra = ds["NB_SIZE_SPECTRA_PARTICLES"].values
-    image_number = ds["NB_IMAGE_PARTICLES"].values
+    #part_spectra = ds["NB_SIZE_SPECTRA_PARTICLES"].values
+    #image_number = ds["NB_IMAGE_PARTICLES"].values
+    lpm_concentration = ds["CONCENTRATION_LPM"].values
 
     # Particle class sizes
     lpm_classes = [
@@ -110,11 +111,11 @@ def extract_LPM(ds):
     ]
 
     # Create DataFrame from transposed particle spectra
-    df = pd.DataFrame(part_spectra, columns=lpm_classes)
+    df = pd.DataFrame(lpm_concentration, columns=lpm_classes)
 
     # Divide by image volume (0.7L * number of images)
-    for col in lpm_classes:
-        df[col] = df[col] / (0.7 * image_number)
+    #for col in lpm_classes:
+    #    df[col] = df[col] / (0.7 * image_number)
 
     # Add metadata
     df["depth"] = pres
@@ -145,27 +146,6 @@ def extract_LPM(ds):
     ds.close()
 
     return df
-
-# Add oceanic zones
-def assign_zone(wmo):
-    zone_map = {
-        "Labrador Sea": [6904240, 6904241, 1902578, 4903634],
-        "Arabian Sea": [4903660, 6990514],
-        "Guinea Dome": [3902498, 1902601],
-        "Apero mission": [1902637, 4903740, 4903739],
-        "West Kerguelen": [2903787, 4903657],
-        "East Kerguelen": [1902593, 4903658],
-        "Tropical Indian Ocean": [5906970, 3902473, 6990503, 3902471],
-        "South Pacific Gyre": [2903783],
-        "California Current": [6903093, 6903094],
-        "Nordic Seas": [7901028, 2903794],
-        "North Pacific Gyre": [1902685],
-    }
-
-    for zone, wmos in zone_map.items():
-        if wmo in wmos:
-            return zone
-    return None
 
 # WMO list: override with WMO_TEST env var for quick single-float testing
 # Usage: WMO_TEST=1902578 npm run build

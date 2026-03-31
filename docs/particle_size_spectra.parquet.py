@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 import pyarrow as pa
 import pyarrow.parquet as pq
-from utils import extract_LPM, assign_zone, open_nc_cached, WMO
+from utils import extract_LPM, open_nc_cached, WMO
 
 
 def compute_slope(i, data_spectra, mid_DSE, size_bin):
@@ -178,10 +178,6 @@ if len(dfs) == 0:
     print("No data found for any WMO", file=sys.stderr)
     sys.exit(1)
 tmp = pd.concat(dfs, ignore_index=True)
-
-
-# Add oceanic zones
-tmp["zone"] = tmp["wmo"].astype(int).apply(assign_zone)
 
 # Ensure wmo is string
 tmp["wmo"] = tmp["wmo"].astype(str)
