@@ -26,7 +26,7 @@ tmp = pd.concat(dfs, ignore_index=True)
 
 # Reshape data: pivot longer
 tmp = tmp.melt(
-    id_vars=["depth", "park_depth", "cycle", "juld", "wmo"],
+    id_vars=["park_depth", "cycle", "juld", "wmo"],
     value_vars=[col for col in tmp.columns if col.startswith("NP_Size_")],
     var_name="size",
     value_name="concentration",
@@ -34,7 +34,7 @@ tmp = tmp.melt(
 
 # Remove outliers
 tmp = (
-    tmp.groupby(["wmo", "size", "cycle", "park_depth"], group_keys=False)
+    tmp.groupby(["wmo", "size", "cycle", "park_depth"], group_keys=True)
     .apply(lambda x: x.assign(concentration=remove_outliers(x["concentration"])))
     .dropna(subset=["concentration"])
     .reset_index(drop=False)

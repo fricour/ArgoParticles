@@ -137,7 +137,7 @@ def extract_LPM(ds):
                 x["depth"] < 350, 200, np.where(x["depth"] > 750, 1000, 500)
             )
         )
-        .query('juld > "2021-01-01" and juld < "2027-01-01"') # because some crazy dates were found at some time ...
+        .query('juld > "2021-01-01" and juld < "2028-01-01"') # because some crazy dates were found at some time ...
         .astype({"cycle": int})
         .reset_index()
     )
