@@ -42,7 +42,10 @@ def download_s3_cached(s3_path):
 def open_nc_cached(s3_path):
     """Download a NetCDF file from S3 (cached) and return an xarray Dataset."""
     local_path = download_s3_cached(s3_path)
-    return xr.open_dataset(local_path, engine="scipy")
+    try:
+        return xr.open_dataset(local_path, engine="scipy")
+    except Exception:
+        return xr.open_dataset(local_path, engine="h5netcdf")
 
 # --- Dynamic WMO list ---
 
