@@ -47,6 +47,12 @@ const pickFloatInput = Inputs.select(wmo, {
 const sel = pickFloatInput.querySelector("select");
 if (sel) { sel.size = 6; }
 const pickFloat = Generators.input(pickFloatInput);
+
+const showPointsInput = Inputs.toggle({label: "Show data points", value: false});
+const showPoints = Generators.input(showPointsInput);
+
+const pickBinInput = Inputs.radio(["daily", "weekly", "monthly"], {label: "Binning", value: "weekly"});
+const pickBin = Generators.input(pickBinInput);
 ```
 
 ```js
@@ -61,12 +67,13 @@ const pickFloatStr = selectedWmos.length > 0 ? selectedWmos.map(d => `'${d}'`).j
 const particle_filtered = (pickDepth.length === 0 || selectedWmos.length === 0)
   ? []
   : await sql([`
-  SELECT park_depth, wmo, size, concentration, juld
+  SELECT park_depth, wmo, size, period, q1, median, q3, whisker_lo, whisker_hi, n
   FROM particle
   WHERE park_depth IN (${pickDepthStr})
     AND size = ${pickSizeClass}
     AND wmo IN (${pickFloatStr})
-  ORDER BY juld
+    AND bin = '${pickBin}'
+  ORDER BY period
 `]);
 
 const ost_filtered = (pickDepth.length === 0 || selectedWmos.length === 0)
@@ -161,11 +168,11 @@ const mapDiv = (() => {
 
 ```js
 const concentrationStats = (() => {
-  const vals = [...particle_filtered].map(d => d.concentration).filter(v => v != null).sort((a, b) => a - b);
+  const vals = [...particle_filtered].map(d => d.q3).filter(v => v != null).sort((a, b) => a - b);
   if (vals.length === 0) return {median: 20, max: 1000};
   return {
     median: Math.ceil(vals[Math.floor(vals.length / 2)] * 2),
-    max: Math.ceil(d3.max(vals))
+    max: Math.ceil(d3.max(vals) * 1.5)
   };
 })();
 
@@ -189,21 +196,29 @@ const maxFlux = Generators.input(maxFluxInput);
 ```js
 const particle_plot = resize((width) => Plot.plot({
   marks: [
+    // Whiskers (vertical line from whisker_lo to whisker_hi)
+    Plot.ruleX(particle_filtered, {
+      x: "period", y1: "whisker_lo", y2: "whisker_hi",
+      stroke: d => colorScale(String(d.wmo)),
+      strokeOpacity: 0.4
+    }),
+    // IQR box (q1 to q3)
+    Plot.ruleX(particle_filtered, {
+      x: "period", y1: "q1", y2: "q3",
+      stroke: d => colorScale(String(d.wmo)),
+      strokeWidth: 4, strokeOpacity: 0.6
+    }),
+    // Median tick
     Plot.dot(particle_filtered, {
-      y: "concentration", x: "juld",
+      x: "period", y: "median",
       fill: d => colorScale(String(d.wmo)),
-      r: 1, opacity: 0.5
+      r: 2
     }),
     Plot.tip(particle_filtered, Plot.pointer({
-      y: "concentration", x: "juld",
-      title: d => `WMO: ${d.wmo}\nDepth: ${d.park_depth.toFixed(0)} m`
+      x: "period", y: "median",
+      title: d => `WMO: ${d.wmo}\nDepth: ${d.park_depth} m\nMedian: ${d.median.toFixed(2)}\nQ1: ${d.q1.toFixed(2)} | Q3: ${d.q3.toFixed(2)}\nn=${d.n}`
     })),
-    Plot.crosshair(particle_filtered, {x: "juld", y: "concentration"}),
-    Plot.lineY(particle_filtered, Plot.windowY({
-      k: 60, reduce: "median", x: "juld", y: "concentration",
-      stroke: d => colorScale(String(d.wmo)),
-      strokeWidth: 3, z: d => `${d.wmo}-${d.park_depth}`
-    }), {sort: "juld"})
+    Plot.crosshair(particle_filtered, {x: "period", y: "median"})
   ],
   y: {label: "Concentration (#/L)", domain: [0, maxConcentration]},
   x: {label: "Date"},
@@ -215,22 +230,28 @@ const particle_plot = resize((width) => Plot.plot({
 ```
 
 ```js
+const depthDash = new Map([[200, "0"], [500, "8 4"], [1000, "12 4 2 4"]]);
+
 const pss_plot = resize((width) => Plot.plot({
   marks: [
-    Plot.dot(pss_filtered, {
+    ...(showPoints ? [Plot.dot(pss_filtered, {
       y: "mean_slope", x: "juld_date",
       fill: d => colorScale(String(d.wmo)),
       r: 3, opacity: 0.5, symbol: "park_depth"
-    }),
+    })] : []),
     Plot.tip(pss_filtered, Plot.pointer({
       y: "mean_slope", x: "juld_date",
       title: d => `WMO: ${d.wmo}\nDepth: ${d.park_depth} m`
     })),
-    Plot.lineY(pss_filtered, Plot.windowY({
-      k: 12, reduce: "median", x: "juld_date", y: "mean_slope",
-      stroke: d => colorScale(String(d.wmo)),
-      strokeWidth: 3, z: d => `${d.wmo}-${d.park_depth}`
-    })),
+    ...[200, 500, 1000].map(depth => {
+      const subset = [...pss_filtered].filter(d => d.park_depth === depth);
+      return Plot.lineY(subset, Plot.windowY({
+        k: 12, reduce: "median", x: "juld_date", y: "mean_slope",
+        stroke: d => colorScale(String(d.wmo)),
+        strokeWidth: 3, strokeDasharray: depthDash.get(depth),
+        z: d => `${d.wmo}-${d.park_depth}`
+      }));
+    }),
     Plot.crosshair(pss_filtered, {x: "juld_date", y: "mean_slope"})
   ],
   y: {label: "Mean slope"},
@@ -249,20 +270,24 @@ const pss_plot = resize((width) => Plot.plot({
 ```js
 const ost_plot = resize((width) => Plot.plot({
   marks: [
-    Plot.dot(ost_filtered, {
+    ...(showPoints ? [Plot.dot(ost_filtered, {
       y: "total_flux", x: "max_time",
       fill: d => colorScale(String(d.wmo)),
       r: 3, opacity: 0.5, symbol: "park_depth"
-    }),
+    })] : []),
     Plot.tip(ost_filtered, Plot.pointer({
       y: "total_flux", x: "max_time",
       title: d => `WMO: ${d.wmo}\nDepth: ${d.park_depth} m\nSmall: ${d.small_flux.toFixed(2)}\nLarge: ${d.large_flux.toFixed(2)}`
     })),
-    Plot.lineY(ost_filtered, Plot.windowY({
-      k: 12, reduce: "median", x: "max_time", y: "total_flux",
-      stroke: d => colorScale(String(d.wmo)),
-      strokeWidth: 3, z: d => `${d.wmo}-${d.park_depth}`
-    })),
+    ...[200, 500, 1000].map(depth => {
+      const subset = [...ost_filtered].filter(d => d.park_depth === depth);
+      return Plot.lineY(subset, Plot.windowY({
+        k: 12, reduce: "median", x: "max_time", y: "total_flux",
+        stroke: d => colorScale(String(d.wmo)),
+        strokeWidth: 3, strokeDasharray: depthDash.get(depth),
+        z: d => `${d.wmo}-${d.park_depth}`
+      }));
+    }),
     Plot.crosshair(ost_filtered, {x: "max_time", y: "total_flux"})
   ],
   y: {label: "Total particle flux (mg C m⁻² d⁻¹)", domain: [0, maxFlux]},
@@ -278,6 +303,7 @@ const ost_plot = resize((width) => Plot.plot({
 <div class="card">
   ${pickDepthInput}
   ${pickFloatInput}
+  ${showPointsInput}
 </div>
 
 
@@ -301,6 +327,7 @@ const ost_plot = resize((width) => Plot.plot({
     <h2>Particle concentrations at parking depth</h2>
     <h3>Measured with the <a href="http://www.hydroptic.com/index.php/public/Page/product_item/UVP6-LP">UVP6</a>.</h3>
     ${pickSizeClassInput}
+    ${pickBinInput}
     ${maxConcentrationInput}
     ${particle_plot}
   </div>

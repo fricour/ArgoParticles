@@ -40,23 +40,52 @@ tmp = (
     .reset_index(drop=False)
 )
 tmp = tmp.loc[:, ~tmp.columns.duplicated()]
-
-# Drop columns not used in frontend queries
 tmp = tmp.drop(columns=["level_4", "cycle"], errors="ignore")
 
-# Sort by size, park_depth, wmo for better predicate pushdown in DuckDB-WASM
-tmp = tmp.sort_values(["size", "park_depth", "wmo"]).reset_index(drop=True)
+# Compute boxplot stats for a group
+def boxplot_stats(group):
+    vals = group["concentration"]
+    q1 = vals.quantile(0.25)
+    q3 = vals.quantile(0.75)
+    iqr = q3 - q1
+    median = vals.median()
+    whisker_lo = vals[vals >= q1 - 1.5 * iqr].min()
+    whisker_hi = vals[vals <= q3 + 1.5 * iqr].max()
+    return pd.Series({
+        "q1": q1,
+        "median": median,
+        "q3": q3,
+        "whisker_lo": whisker_lo,
+        "whisker_hi": whisker_hi,
+        "n": len(vals),
+    })
 
-# Based on https://observablehq.observablehq.cloud/framework-example-loader-python-to-parquet/
-# Write DataFrame to a temporary file-like object
+# Compute stats at daily, weekly and monthly resolution
+all_stats = []
+for bin_label, period in [("daily", "D"), ("weekly", "W"), ("monthly", "M")]:
+    if period == "D":
+        tmp["period"] = tmp["juld"].dt.floor("D")
+    elif period == "W":
+        tmp["period"] = tmp["juld"].dt.to_period("W").dt.to_timestamp()
+    else:
+        tmp["period"] = tmp["juld"].dt.to_period("M").dt.to_timestamp()
+
+    s = (
+        tmp.groupby(["period", "wmo", "size", "park_depth"])
+        .apply(boxplot_stats)
+        .reset_index()
+    )
+    s["bin"] = bin_label
+    all_stats.append(s)
+
+stats = pd.concat(all_stats, ignore_index=True)
+
+# Sort for efficient predicate pushdown
+stats = stats.sort_values(["bin", "size", "park_depth", "wmo", "period"]).reset_index(drop=True)
+
+# Write to parquet
 buf = pa.BufferOutputStream()
-table = pa.Table.from_pandas(tmp)
-# Use row_group_size so each size class lands in its own row group
-rows_per_size = len(tmp) // tmp["size"].nunique() if tmp["size"].nunique() > 0 else len(tmp)
-pq.write_table(table, buf, compression="snappy", row_group_size=rows_per_size)
-
-# Get the buffer as a bytes object
+table = pa.Table.from_pandas(stats)
+pq.write_table(table, buf, compression="snappy")
 buf_bytes = buf.getvalue().to_pybytes()
-
-# Write the bytes to standard output
 sys.stdout.buffer.write(buf_bytes)
