@@ -41,11 +41,19 @@ tmp = (
 )
 tmp = tmp.loc[:, ~tmp.columns.duplicated()]
 
+# Drop columns not used in frontend queries
+tmp = tmp.drop(columns=["level_4", "cycle"], errors="ignore")
+
+# Sort by size, park_depth, wmo for better predicate pushdown in DuckDB-WASM
+tmp = tmp.sort_values(["size", "park_depth", "wmo"]).reset_index(drop=True)
+
 # Based on https://observablehq.observablehq.cloud/framework-example-loader-python-to-parquet/
 # Write DataFrame to a temporary file-like object
 buf = pa.BufferOutputStream()
 table = pa.Table.from_pandas(tmp)
-pq.write_table(table, buf, compression="snappy")
+# Use row_group_size so each size class lands in its own row group
+rows_per_size = len(tmp) // tmp["size"].nunique() if tmp["size"].nunique() > 0 else len(tmp)
+pq.write_table(table, buf, compression="snappy", row_group_size=rows_per_size)
 
 # Get the buffer as a bytes object
 buf_bytes = buf.getvalue().to_pybytes()

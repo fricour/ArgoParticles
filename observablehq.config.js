@@ -6,15 +6,10 @@ export default {
   // The pages and sections in the sidebar. If you don’t specify this option,
   // all pages will be listed in alphabetical order. Listing pages explicitly
   // lets you organize them into sections and have unlisted pages.
-  // pages: [
-  //   {
-  //     name: "Examples",
-  //     pages: [
-  //       {name: "Dashboard", path: "/example-dashboard"},
-  //       {name: "Report", path: "/example-report"}
-  //     ]
-  //   }
-  // ],
+  pages: [
+    {name: "Particles", path: "/"},
+    // {name: "Plankton", path: "/plankton"}
+  ],
 
   // Some additional configuration options and their defaults:
   //theme: "light", // try "light", "dark", "slate", etc.
