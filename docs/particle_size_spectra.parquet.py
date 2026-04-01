@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 import pyarrow as pa
 import pyarrow.parquet as pq
-from utils import extract_LPM, open_nc_cached, WMO
+from utils import extract_LPM, get_launch_date, open_nc_cached, remove_outliers, WMO
 
 
 def compute_slope(i, data_spectra, mid_DSE, size_bin):
@@ -45,7 +45,7 @@ def compute_slope(i, data_spectra, mid_DSE, size_bin):
     return slope
 
 
-def compute_spectral_slope(wmo_float, ds):
+def compute_spectral_slope(wmo_float, ds, launch_date=None):
     """
     Compute spectral slope from UVP data at parking depth.
 
@@ -54,6 +54,8 @@ def compute_spectral_slope(wmo_float, ds):
     wmo_float : str
         WMO float identifier
     ds : xr.dataset
+    launch_date : pd.Timestamp, optional
+        Float deployment date for filtering bogus dates
 
     Returns:
     --------
@@ -61,7 +63,7 @@ def compute_spectral_slope(wmo_float, ds):
         DataFrame with computed spectral slopes
     """
     # Extract UVP data at parking
-    data = extract_LPM(ds)
+    data = extract_LPM(ds, launch_date=launch_date)
 
     # Particle size classes
     lpm_classes = [
@@ -149,12 +151,12 @@ def compute_spectral_slope(wmo_float, ds):
         lambda x: 200 if x < 350 else (1000 if x > 750 else 500)
     )
 
-    # Convert juld to data only
-    data["juld_date"] = pd.to_datetime(data["juld"]).dt.date
+    # Round juld to daily resolution for aggregation
+    data["juld"] = data["juld"].dt.floor("D")
 
     # Group by and summarize
     result = data.groupby(
-        ["wmo", "cycle", "park_depth", "juld_date"], as_index=False
+        ["wmo", "cycle", "park_depth", "juld"], as_index=False
     ).agg(mean_slope=("spectral_slope", lambda x: x.mean(skipna=True)))
 
     return result
@@ -166,7 +168,8 @@ dfs = []
 for wmo in WMO:
     try:
         ds = open_nc_cached(f"s3://argo-gdac-sandbox/pub/aux/coriolis/{wmo}/{wmo}_Rtraj_aux.nc")
-        df = compute_spectral_slope(wmo, ds)
+        launch_date = get_launch_date(wmo)
+        df = compute_spectral_slope(wmo, ds, launch_date=launch_date)
         if len(df) > 0:
             dfs.append(df)
     except Exception as e:
@@ -181,6 +184,13 @@ tmp = pd.concat(dfs, ignore_index=True)
 
 # Ensure wmo is string
 tmp["wmo"] = tmp["wmo"].astype(str)
+
+# Remove outliers on mean_slope per wmo and park_depth
+tmp["mean_slope"] = (
+    tmp.groupby(["wmo", "park_depth"])["mean_slope"]
+    .transform(remove_outliers)
+)
+tmp = tmp.dropna(subset=["mean_slope"])
 
 # Based on https://observablehq.observablehq.cloud/framework-example-loader-python-to-parquet/
 # Write DataFrame to a temporary file-like object

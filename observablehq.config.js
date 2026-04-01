@@ -17,7 +17,8 @@ export default {
   footer: "Built with <a href='https://observablehq.com/'>Observable</a>. Author: <a href='https://fricour.com/'>Florian Ricour</a>", // what to show in the footer (HTML)
   // toc: true, // whether to show the table of contents
   // pager: true, // whether to show previous & next links in the footer
-  root: "docs" // path to the source root for preview
+  root: "docs", // path to the source root for preview
+  sidebar: false // hide the sidebar
   // output: "dist", // path to the output root for build
   // search: true, // activate search
 };

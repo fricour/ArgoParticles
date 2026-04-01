@@ -235,24 +235,24 @@ const depthDash = new Map([[200, "0"], [500, "8 4"], [1000, "12 4 2 4"]]);
 const pss_plot = resize((width) => Plot.plot({
   marks: [
     ...(showPoints ? [Plot.dot(pss_filtered, {
-      y: "mean_slope", x: "juld_date",
+      y: "mean_slope", x: "juld",
       fill: d => colorScale(String(d.wmo)),
       r: 3, opacity: 0.5, symbol: "park_depth"
     })] : []),
     Plot.tip(pss_filtered, Plot.pointer({
-      y: "mean_slope", x: "juld_date",
+      y: "mean_slope", x: "juld",
       title: d => `WMO: ${d.wmo}\nDepth: ${d.park_depth} m`
     })),
     ...[200, 500, 1000].map(depth => {
       const subset = [...pss_filtered].filter(d => d.park_depth === depth);
       return Plot.lineY(subset, Plot.windowY({
-        k: 12, reduce: "median", x: "juld_date", y: "mean_slope",
+        k: 12, reduce: "median", x: "juld", y: "mean_slope",
         stroke: d => colorScale(String(d.wmo)),
         strokeWidth: 3, strokeDasharray: depthDash.get(depth),
         z: d => `${d.wmo}-${d.park_depth}`
       }));
     }),
-    Plot.crosshair(pss_filtered, {x: "juld_date", y: "mean_slope"})
+    Plot.crosshair(pss_filtered, {x: "juld", y: "mean_slope"})
   ],
   y: {label: "Mean slope"},
   x: {label: "Date", type: "utc",
@@ -343,6 +343,6 @@ const ost_plot = resize((width) => Plot.plot({
 <div class="small note">
   The UVP6 is an underwater imaging system that measures the size and gray level of marine particles, with an <a href='https://github.com/ecotaxa/uvpec'>integrated classification algorithm</a>.<br><br>
   The transmissometer, mounted vertically on autonomous floats, measures particle accumulation on the upward-facing optical window at parking depth, functioning as an optical sediment trap (OST).<br><br>
-  Moving median smoothing: k=60 for particle concentrations, k=12 for OST and particle size spectra. Outliers removed via the <a href='https://en.wikipedia.org/wiki/Interquartile_range#Outliers'>IQR method</a>.<br><br>
+  Particle concentrations are shown as boxplots (daily, weekly, or monthly). Moving median smoothing: k=12 for OST and particle size spectra. Outliers removed via the <a href='https://en.wikipedia.org/wiki/Interquartile_range#Outliers'>IQR method</a> for particle size spectra.<br><br>
   Data from the <a href="https://argo.ucsd.edu">International Argo Program</a>.
 </div>

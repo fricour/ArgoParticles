@@ -69,6 +69,13 @@ def get_wmo_list():
 
 # --- Utility functions ---
 
+def get_launch_date(wmo):
+    """Get float launch date from JULD_FIRST_LOCATION in the standard trajectory file."""
+    ds = open_nc_cached(f"s3://argo-gdac-sandbox/pub/dac/coriolis/{wmo}/{wmo}_Rtraj.nc")
+    launch_date = pd.Timestamp(ds["JULD_FIRST_LOCATION"].values[0])
+    ds.close()
+    return launch_date
+
 def remove_outliers(series):
     """Remove outliers based on IQR method"""
     q1 = series.quantile(0.25)
@@ -78,7 +85,7 @@ def remove_outliers(series):
     upper_bound = q3 + 1.5 * iqr
     return series.where((series >= lower_bound) & (series <= upper_bound))
 
-def extract_LPM(ds):
+def extract_LPM(ds, launch_date=None):
     """Extract particle data at parking depth from NetCDF file"""
 
     # Extract variables
@@ -137,10 +144,16 @@ def extract_LPM(ds):
                 x["depth"] < 350, 200, np.where(x["depth"] > 750, 1000, 500)
             )
         )
-        .query('juld > "2021-01-01" and juld < "2028-01-01"') # because some crazy dates were found at some time ...
         .astype({"cycle": int})
         .reset_index()
     )
+
+    # Remove bogus dates (before launch or in the future)
+    now = pd.Timestamp.now()
+    if launch_date is not None:
+        df = df[(df["juld"] >= launch_date) & (df["juld"] <= now)]
+    else:
+        df = df[df["juld"] <= now]
 
     # Reorder columns
     cols = ["depth", "park_depth", "cycle", "juld", "wmo"] + lpm_classes
@@ -150,7 +163,7 @@ def extract_LPM(ds):
 
     return df
 
-def extract_taxo(ds):
+def extract_taxo(ds, launch_date=None):
     """Extract taxo data at parking depth from NetCDF file"""
 
     # Extract variables
@@ -214,10 +227,16 @@ def extract_taxo(ds):
                 x["depth"] < 350, 200, np.where(x["depth"] > 750, 1000, 500)
             )
         )
-        .query('juld > "2021-01-01" and juld < "2028-01-01"') # because some crazy dates were found at some time ...
         .astype({"cycle": int})
         .reset_index()
     )
+
+    # Remove bogus dates (before launch or in the future)
+    now = pd.Timestamp.now()
+    if launch_date is not None:
+        df = df[(df["juld"] >= launch_date) & (df["juld"] <= now)]
+    else:
+        df = df[df["juld"] <= now]
 
     # Reorder columns
     cols = ["depth", "park_depth", "cycle", "juld", "wmo"] + taxo_classes
@@ -227,7 +246,7 @@ def extract_taxo(ds):
 
     return df
 
-def extract_biovolume(ds):
+def extract_biovolume(ds, launch_date=None):
     """Extract biovolume data at parking depth from NetCDF file"""
 
     # Extract variables
@@ -291,10 +310,16 @@ def extract_biovolume(ds):
                 x["depth"] < 350, 200, np.where(x["depth"] > 750, 1000, 500)
             )
         )
-        .query('juld > "2021-01-01" and juld < "2028-01-01"') # because some crazy dates were found at some time ... -> should use QC on the JULD variable instead, but it seems to be missing in some files, so let's just filter on reasonable dates for now
         .astype({"cycle": int})
         .reset_index()
     )
+
+    # Remove bogus dates (before launch or in the future)
+    now = pd.Timestamp.now()
+    if launch_date is not None:
+        df = df[(df["juld"] >= launch_date) & (df["juld"] <= now)]
+    else:
+        df = df[df["juld"] <= now]
 
     # Reorder columns
     cols = ["depth", "park_depth", "cycle", "juld", "wmo"] + taxo_classes

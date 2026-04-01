@@ -3,7 +3,7 @@ import pandas as pd
 import sys
 import pyarrow as pa
 import pyarrow.parquet as pq
-from utils import open_nc_cached, WMO
+from utils import get_launch_date, open_nc_cached, WMO
 
 
 def slide(x, k, fun, n=1, **kwargs):
@@ -97,7 +97,7 @@ def despike(x, k=3, method="median", threshold=2):
     return x_despiked
 
 
-def extract_cp_data(wmo, ds):
+def extract_cp_data(wmo, ds, launch_date=None):
     """
     Extract transmissometer data from netCDF file.
 
@@ -107,6 +107,8 @@ def extract_cp_data(wmo, ds):
         WMO float identifier
     ds : xarray.Dataset
         Dataset containing float data
+    launch_date : pd.Timestamp, optional
+        Float deployment date for filtering bogus dates
 
     Returns:
     --------
@@ -135,6 +137,13 @@ def extract_cp_data(wmo, ds):
 
     # Clean data
     df = df[(df["cycle"] >= 1) & (df["mc"] == 290)].dropna(subset=["cp"]).copy()
+
+    # Remove bogus dates (before launch or in the future)
+    now = pd.Timestamp.now()
+    if launch_date is not None:
+        df = df[(df["juld"] >= launch_date) & (df["juld"] <= now)]
+    else:
+        df = df[df["juld"] <= now]
 
     # Compute park_depth
     df["park_depth"] = df["depth"].apply(
@@ -319,7 +328,7 @@ def derive_ost_flux(data, wmo_float):
 
     return result
 
-def extract_ost_data(wmo, ds):
+def extract_ost_data(wmo, ds, launch_date=None):
     """
     Extract optical sediment trap data.
 
@@ -329,6 +338,8 @@ def extract_ost_data(wmo, ds):
         WMO float identifier
     ds : xarray.Dataset
         Dataset containing float data
+    launch_date : pd.Timestamp, optional
+        Float deployment date for filtering bogus dates
 
     Returns:
     --------
@@ -339,7 +350,7 @@ def extract_ost_data(wmo, ds):
     park_depths = [200, 500, 1000]
 
     # Extract cp data from the float
-    data = extract_cp_data(wmo, ds)
+    data = extract_cp_data(wmo, ds, launch_date=launch_date)
 
     res = []
     max_cycle = data["cycle"].max()
@@ -372,7 +383,8 @@ dfs = []
 for wmo in WMO:
     try:
         ds = open_nc_cached(f"s3://argo-gdac-sandbox/pub/dac/coriolis/{wmo}/{wmo}_Rtraj.nc")
-        result = extract_ost_data(wmo, ds)
+        launch_date = get_launch_date(wmo)
+        result = extract_ost_data(wmo, ds, launch_date=launch_date)
         if len(result) > 0:
             dfs.append(result)
     except Exception as e:

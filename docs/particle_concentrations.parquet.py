@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 import pyarrow as pa
 import pyarrow.parquet as pq
-from utils import remove_outliers, extract_LPM, open_nc_cached, WMO
+from utils import extract_LPM, get_launch_date, open_nc_cached, WMO
 
 # Extract particle data for each float
 dfs = []
@@ -11,7 +11,8 @@ dfs = []
 for wmo in WMO:
     try:
         ds = open_nc_cached(f"s3://argo-gdac-sandbox/pub/aux/coriolis/{wmo}/{wmo}_Rtraj_aux.nc")
-        df = extract_LPM(ds)
+        launch_date = get_launch_date(wmo)
+        df = extract_LPM(ds, launch_date=launch_date)
         if len(df) > 0:
             dfs.append(df)
     except Exception as e:
@@ -32,15 +33,7 @@ tmp = tmp.melt(
     value_name="concentration",
 ).assign(size=lambda x: x["size"].str.split("_").str[2].astype(float))
 
-# Remove outliers
-tmp = (
-    tmp.groupby(["wmo", "size", "cycle", "park_depth"], group_keys=True)
-    .apply(lambda x: x.assign(concentration=remove_outliers(x["concentration"])))
-    .dropna(subset=["concentration"])
-    .reset_index(drop=False)
-)
-tmp = tmp.loc[:, ~tmp.columns.duplicated()]
-tmp = tmp.drop(columns=["level_4", "cycle"], errors="ignore")
+tmp = tmp.drop(columns=["cycle"], errors="ignore")
 
 # Compute boxplot stats for a group
 def boxplot_stats(group):
